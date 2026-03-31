@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  postgres:
+    restart: always
+
+  api:
+    restart: always
+    environment:
+      NODE_ENV: production
+
+  nginx:
+    restart: always
+
+  # No adminer in production
+  adminer:
+    profiles:
+      - dev

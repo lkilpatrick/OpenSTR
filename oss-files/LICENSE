@@ -1,0 +1,65 @@
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+OpenSTR — Open Source Short-Term Rental Management
+Copyright (C) 2026 [Your Name]
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ADDITIONAL ATTRIBUTION REQUIREMENT
+
+In addition to the terms of the GNU General Public License v3, any
+deployment of OpenSTR that is accessible to end users (including
+self-hosted instances used by guests, cleaners, or staff) must
+prominently display the following notice in the application UI —
+either in the footer, an About screen, or a Credits page:
+
+    "Powered by OpenSTR — created by [Your Name]
+     https://github.com/[your-username]/openstr"
+
+This attribution requirement applies to all versions, whether
+modified or unmodified, and cannot be removed by downstream users.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
+The full text of the GNU General Public License v3 is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+Key terms summary (not a substitute for the full license):
+
+1. You may copy, distribute and modify the software as long as you
+   track changes/dates in source files.
+
+2. Any modifications to or software including (via compiler) GPL-licensed
+   code must also be made available under the GPL along with build
+   instructions and installation information.
+
+3. You must keep intact all notices that refer to this License and
+   to the absence of any warranty, and give any other recipients of
+   the Program a copy of this License along with the Program.
+
+4. If the modified program normally reads commands interactively when
+   run, you must cause it, when started running for such interactive
+   use in the most ordinary way, to print or display an announcement
+   including an appropriate copyright notice and a notice that there
+   is no warranty (or else, saying that you provide a warranty) and
+   that users may redistribute the program under these conditions,
+   and telling the user how to view a copy of this License.
