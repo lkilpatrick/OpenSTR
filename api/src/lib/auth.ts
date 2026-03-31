@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { Pool } from 'pg';
+import bcrypt from 'bcrypt';
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
@@ -9,6 +10,10 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    password: {
+      hash: (password: string) => bcrypt.hash(password, 12),
+      verify: ({ hash, password }: { hash: string; password: string }) => bcrypt.compare(password, hash),
+    },
   },
   user: {
     modelName: 'users',

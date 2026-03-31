@@ -80,7 +80,6 @@ async function main() {
   await pool.query(`DELETE FROM guest_messages`);
   await pool.query(`DELETE FROM issues`);
   await pool.query(`DELETE FROM guest_ratings`);
-  await pool.query(`DELETE FROM superhost_snapshots`);
   await pool.query(`DELETE FROM supply_alerts`);
   await pool.query(`DELETE FROM task_completions`);
   await pool.query(`DELETE FROM photos`);
@@ -103,6 +102,13 @@ async function main() {
     INSERT INTO users (id, email, name, role, password_hash, active) VALUES
       ($1, 'admin@openstr.dev', 'Property Owner', 'owner', $3, true),
       ($2, 'dallas@openstr.dev', 'Dallas J', 'cleaner', $4, true)
+  `, [USER.ADMIN, USER.DALLAS, adminHash, dallasHash]);
+
+  // better-auth authenticates from the account table, not users.password_hash
+  await pool.query(`
+    INSERT INTO account (id, user_id, account_id, provider_id, password, created_at, updated_at) VALUES
+      (gen_random_uuid()::text, $1::uuid, $1::text, 'credential', $3, now(), now()),
+      (gen_random_uuid()::text, $2::uuid, $2::text, 'credential', $4, now(), now())
   `, [USER.ADMIN, USER.DALLAS, adminHash, dallasHash]);
   console.log('✅ Users seeded (admin + Dallas J)');
 
@@ -433,13 +439,6 @@ async function main() {
       ($1, 'Johnson Family', 'We accidentally left a phone charger behind. Could you check the bedroom nightstand?', 'airbnb', false)
   `, [PROP.OCEAN_VIEW]);
   console.log('✅ Guest messages seeded');
-
-  // ── Superhost snapshot ───────────────────────────────────────────────────
-  await pool.query(`
-    INSERT INTO superhost_snapshots (property_id, snapshot_date, overall_rating, response_rate, cancellation_rate, completed_stays, qualifies, next_assessment_date)
-    VALUES ($1, current_date, 4.85, 98.00, 0.50, 12, true, current_date + interval '90 days')
-  `, [PROP.OCEAN_VIEW]);
-  console.log('✅ Superhost snapshot seeded');
 
   console.log('\n🎉 Full seed complete! Login credentials:');
   console.log('   Admin:  admin@openstr.dev / admin123');

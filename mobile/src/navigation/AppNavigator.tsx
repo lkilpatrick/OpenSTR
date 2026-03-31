@@ -3,7 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View } from 'react-native';
-import { getAccessToken } from '../lib/storage';
+import { getAccessToken, clearAccessToken } from '../lib/storage';
+import { api, setOnUnauthenticated } from '../lib/api';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import ScheduleScreen from '../screens/schedule/ScheduleScreen';
@@ -37,7 +38,23 @@ export default function AppNavigator() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    getAccessToken().then((token) => setIsAuthenticated(!!token));
+    setOnUnauthenticated(() => setIsAuthenticated(false));
+
+    async function validateSession() {
+      const token = await getAccessToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
+      try {
+        await api.get('/api/auth/get-session');
+        setIsAuthenticated(true);
+      } catch {
+        await clearAccessToken();
+        setIsAuthenticated(false);
+      }
+    }
+    validateSession();
   }, []);
 
   if (isAuthenticated === null) {

@@ -14,7 +14,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
@@ -23,8 +23,10 @@ export function useAuth() {
       const session = data as { token?: string; user?: AuthUser };
       if (session.token) await saveAccessToken(session.token);
       if (session.user) setUser(session.user);
+      return true;
     } catch {
       setError('Invalid email or password');
+      return false;
     } finally {
       setLoading(false);
     }
