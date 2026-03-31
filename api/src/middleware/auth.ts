@@ -44,7 +44,7 @@ export function requirePropertyAccess(paramName = 'propertyId') {
       next();
       return;
     }
-    const propertyId = req.params[paramName];
+    const propertyId = req.params[paramName] as string;
     if (!req.user.propertyIds.includes(propertyId)) {
       res.status(403).json({ error: 'Forbidden', message: 'No access to this property' });
       return;

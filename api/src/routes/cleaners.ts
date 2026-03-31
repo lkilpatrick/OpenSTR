@@ -153,4 +153,52 @@ router.get('/compare', async (req: AuthRequest, res: Response): Promise<void> =>
   res.json({ cleaner1: stats1, cleaner2: stats2 });
 });
 
+// GET /admin/cleaners/assignments/:propertyId — get cleaner priority list for a property
+router.get('/assignments/:propertyId', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(
+    `SELECT pc.id, pc.user_id, pc.priority, pc.is_primary, pc.is_active, pc.notes,
+            u.name, u.email
+     FROM property_cleaners pc
+     JOIN users u ON u.id = pc.user_id
+     WHERE pc.property_id = $1 AND pc.is_active = true
+     ORDER BY pc.priority ASC, u.name`,
+    [req.params.propertyId]
+  );
+  res.json(result.rows);
+});
+
+// PATCH /admin/cleaners/assignments/:id — update a cleaner assignment (priority, is_primary, notes)
+router.patch('/assignments/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  const fields = ['priority', 'is_primary', 'is_active', 'notes'];
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+  for (const f of fields) {
+    if (req.body[f] !== undefined) { updates.push(`${f} = $${idx++}`); values.push(req.body[f]); }
+  }
+  if (updates.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
+  values.push(req.params.id);
+  const result = await pool.query(
+    `UPDATE property_cleaners SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+    values
+  );
+  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  res.json(result.rows[0]);
+});
+
+// POST /admin/cleaners/assignments — assign a cleaner to a property
+router.post('/assignments', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { property_id, user_id, priority, is_primary, notes } = req.body;
+  if (!property_id || !user_id) { res.status(400).json({ error: 'property_id and user_id required' }); return; }
+  const result = await pool.query(
+    `INSERT INTO property_cleaners (property_id, user_id, priority, is_primary, notes)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (property_id, user_id) DO UPDATE
+       SET priority = $3, is_primary = $4, notes = COALESCE($5, property_cleaners.notes), is_active = true
+     RETURNING *`,
+    [property_id, user_id, priority ?? 0, is_primary ?? false, notes ?? null]
+  );
+  res.status(201).json(result.rows[0]);
+});
+
 export default router;

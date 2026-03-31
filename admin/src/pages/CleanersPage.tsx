@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { useSelectedProperty } from '../components/PropertySwitcher';
 
 interface CleanerRow {
   id: string;
@@ -27,8 +28,24 @@ interface CompareData {
   cleaner2: { compliance: number; speed: number; photo_rate: number; issue_rate: number; total_sessions: number };
 }
 
+interface Assignment {
+  id: string;
+  user_id: string;
+  priority: number;
+  is_primary: boolean;
+  is_active: boolean;
+  notes: string | null;
+  name: string;
+  email: string;
+}
+
+type ViewMode = 'performance' | 'assignments';
+
 export default function CleanersPage() {
+  const { propertyId } = useSelectedProperty();
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('performance');
   const [compareMode, setCompareMode] = useState(false);
   const [compare1, setCompare1] = useState('');
   const [compare2, setCompare2] = useState('');
@@ -62,17 +79,120 @@ export default function CleanersPage() {
     enabled: !!compare1 && !!compare2 && !!comparePropId && compareMode,
   });
 
+  const { data: assignments } = useQuery<Assignment[]>({
+    queryKey: ['cleaner-assignments', propertyId],
+    queryFn: async () => {
+      const { data } = await api.get<Assignment[]>(`/admin/cleaners/assignments/${propertyId}`);
+      return data;
+    },
+    enabled: !!propertyId && viewMode === 'assignments',
+  });
+
+  const updateAssignment = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; priority?: number; is_primary?: boolean; is_active?: boolean }) =>
+      api.patch(`/admin/cleaners/assignments/${id}`, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cleaner-assignments', propertyId] }),
+  });
+
+  const addAssignment = useMutation({
+    mutationFn: (body: { property_id: string; user_id: string; priority: number; is_primary: boolean }) =>
+      api.post('/admin/cleaners/assignments', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cleaner-assignments', propertyId] }),
+  });
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Cleaner Performance</h1>
-        <button onClick={() => { setCompareMode(!compareMode); setSelectedId(null); }}
-          style={{ background: compareMode ? '#6b7280' : '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          {compareMode ? 'Back to List' : 'Compare Cleaners'}
-        </button>
+        <h1 style={{ margin: 0, fontSize: 22 }}>Cleaners</h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => { setViewMode(viewMode === 'assignments' ? 'performance' : 'assignments'); setCompareMode(false); setSelectedId(null); }}
+            style={{ background: viewMode === 'assignments' ? '#10b981' : '#e2e8f0', color: viewMode === 'assignments' ? '#fff' : '#475569', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {viewMode === 'assignments' ? 'Property Assignments' : 'Assignments'}
+          </button>
+          {viewMode === 'performance' && (
+            <button onClick={() => { setCompareMode(!compareMode); setSelectedId(null); }}
+              style={{ background: compareMode ? '#6b7280' : '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {compareMode ? 'Back to List' : 'Compare Cleaners'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {!compareMode ? (
+      {viewMode === 'assignments' ? (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 16 }}>Cleaner Priority for Selected Property</h2>
+          <p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 16px' }}>Default cleaner is priority 0. Backups are 1, 2, etc. Lower number = higher priority.</p>
+          {!propertyId ? (
+            <p style={{ color: '#94a3b8' }}>Select a property in the sidebar first.</p>
+          ) : (
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 16 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
+                    <th style={thSt}>Priority</th>
+                    <th style={thSt}>Cleaner</th>
+                    <th style={thSt}>Role</th>
+                    <th style={thSt}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(assignments ?? []).map(a => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={tdSt}>
+                        <select value={a.priority} onChange={e => updateAssignment.mutate({ id: a.id, priority: parseInt(e.target.value) })}
+                          style={{ padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: 60 }}>
+                          {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </td>
+                      <td style={tdSt}>
+                        <div style={{ fontWeight: 600 }}>{a.name}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>{a.email}</div>
+                      </td>
+                      <td style={tdSt}>
+                        {a.priority === 0 ? (
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#dcfce7', color: '#166534' }}>Default</span>
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#f1f5f9', color: '#64748b' }}>Backup {a.priority}</span>
+                        )}
+                      </td>
+                      <td style={tdSt}>
+                        <button onClick={() => updateAssignment.mutate({ id: a.id, is_active: false })}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(assignments ?? []).length === 0 && (
+                    <tr><td colSpan={4} style={{ ...tdSt, color: '#94a3b8', textAlign: 'center' }}>No cleaners assigned to this property</td></tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Add cleaner */}
+              {(() => {
+                const assignedIds = new Set((assignments ?? []).map(a => a.user_id));
+                const available = (cleaners ?? []).filter(c => !assignedIds.has(c.id));
+                if (available.length === 0) return null;
+                return (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <select id="add-cleaner-select" style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, flex: 1 }}>
+                      {available.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button onClick={() => {
+                      const sel = document.getElementById('add-cleaner-select') as HTMLSelectElement;
+                      if (!sel?.value || !propertyId) return;
+                      const nextPriority = (assignments ?? []).length;
+                      addAssignment.mutate({ property_id: propertyId, user_id: sel.value, priority: nextPriority, is_primary: nextPriority === 0 });
+                    }}
+                      style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Add Cleaner
+                    </button>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      ) : !compareMode ? (
         <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '300px 1fr' : '1fr', gap: 24 }}>
           {/* Cleaner list */}
           <div>
