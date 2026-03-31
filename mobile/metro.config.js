@@ -1,15 +1,19 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..');
 
-// In a monorepo, the root node_modules may contain a different React version
-// (admin uses React 19, mobile uses React 18). Force Metro to always resolve
-// react and react-native from the mobile workspace's own node_modules.
-config.resolver.extraNodeModules = {
-  react: path.resolve(__dirname, 'node_modules/react'),
-  'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
-  'react-native': path.resolve(__dirname, 'node_modules/react-native'),
-};
+const config = getDefaultConfig(projectRoot);
+
+// Monorepo setup: watch the whole workspace so Metro sees symlinked packages
+// (e.g. @openstr/shared) and resolves them correctly.
+config.watchFolders = [workspaceRoot];
+
+// Look in mobile's own node_modules first so react@18 wins over root react@19.
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
 
 module.exports = config;
