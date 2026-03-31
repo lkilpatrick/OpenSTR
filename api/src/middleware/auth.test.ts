@@ -46,14 +46,14 @@ describe('requireAuth', () => {
 
 describe('requireRole', () => {
   it('passes when user has required role', () => {
-    const req = { user: { userId: 'u1', role: 'owner', propertyIds: [] } } as AuthRequest;
+    const req = { user: { userId: 'u1', role: 'owner', propertyIds: [] } } as unknown as AuthRequest;
     const next = mockNext();
     requireRole('owner')(req, mockRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
   it('blocks when user lacks required role', () => {
-    const req = { user: { userId: 'u1', role: 'cleaner', propertyIds: [] } } as AuthRequest;
+    const req = { user: { userId: 'u1', role: 'cleaner', propertyIds: [] } } as unknown as AuthRequest;
     const res = mockRes();
     requireRole('owner')(req, res, mockNext());
     expect(res.status).toHaveBeenCalledWith(403);

@@ -35,9 +35,9 @@ const upload = multer({
 router.post('/:roomCleanId', upload.single('photo'), async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
-  const { type, taken_at } = req.body as { type?: string; taken_at?: string };
-  if (!type || !['before', 'after'].includes(type)) {
-    res.status(400).json({ error: 'type must be "before" or "after"' });
+  const { type, taken_at, notes } = req.body as { type?: string; taken_at?: string; notes?: string };
+  if (!type || !['before', 'after', 'issue'].includes(type)) {
+    res.status(400).json({ error: 'type must be "before", "after", or "issue"' });
     return;
   }
 
