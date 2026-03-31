@@ -1,25 +1,51 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import type { AuthTokenPayload, UserRole } from '@openstr/shared';
+import { auth } from '../lib/auth';
+import { pool } from '../db/pool';
 
-export interface AuthRequest extends Request {
-  user?: AuthTokenPayload;
+export type UserRole = 'guest' | 'cleaner' | 'admin' | 'owner';
+
+export interface AuthUser {
+  userId: string;
+  role: UserRole;
+  propertyIds: string[];
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Unauthorized', message: 'Missing token' });
-    return;
-  }
+export interface AuthRequest extends Request {
+  user?: AuthUser;
+}
 
-  const token = authHeader.slice(7);
+/**
+ * Middleware that validates the better-auth session cookie.
+ * Populates req.user with { userId, role, propertyIds }.
+ */
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthTokenPayload;
-    req.user = payload;
+    const session = await auth.api.getSession({
+      headers: req.headers as Record<string, string>,
+    });
+
+    if (!session?.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'No valid session' });
+      return;
+    }
+
+    const user = session.user as { id: string; role?: string };
+    const role = (user.role ?? 'cleaner') as UserRole;
+
+    // Fetch property IDs for cleaners
+    let propertyIds: string[] = [];
+    if (role === 'cleaner') {
+      const result = await pool.query<{ property_id: string }>(
+        `SELECT property_id FROM property_cleaners WHERE user_id = $1 AND is_active = true`,
+        [user.id]
+      );
+      propertyIds = result.rows.map((r) => r.property_id);
+    }
+
+    req.user = { userId: user.id, role, propertyIds };
     next();
   } catch {
-    res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Unauthorized', message: 'Invalid session' });
   }
 }
 

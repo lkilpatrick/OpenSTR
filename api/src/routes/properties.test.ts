@@ -1,8 +1,5 @@
 import request from 'supertest';
 import express from 'express';
-import jwt from 'jsonwebtoken';
-
-process.env.JWT_SECRET = 'test-secret';
 
 const mockQuery = jest.fn();
 const mockClient = { query: jest.fn(), release: jest.fn() };
@@ -11,22 +8,34 @@ jest.mock('../db/pool', () => ({
   pool: { query: mockQuery, connect: mockConnect },
 }));
 
-import propertiesRouter from './properties';
-import { requireAuth } from '../middleware/auth';
+jest.mock('../lib/auth', () => ({
+  auth: { api: { getSession: jest.fn() } },
+}));
 
-function makeToken(overrides: Record<string, unknown> = {}) {
-  return jwt.sign({ userId: 'u1', role: 'owner', propertyIds: ['p1'], ...overrides }, 'test-secret', { expiresIn: '5m' });
-}
+let currentUser: { userId: string; role: string; propertyIds: string[] } | null = null;
+
+jest.mock('../middleware/auth', () => {
+  const original = jest.requireActual('../middleware/auth');
+  return {
+    ...original,
+    requireAuth: (req: any, res: any, next: any) => {
+      if (currentUser) { req.user = currentUser; next(); }
+      else res.status(401).json({ error: 'Unauthorized' });
+    },
+  };
+});
+
+import propertiesRouter from './properties';
 
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use(requireAuth);
   app.use('/properties', propertiesRouter);
   return app;
 }
 
 beforeEach(() => {
+  currentUser = { userId: 'u1', role: 'owner', propertyIds: ['p1'] };
   mockQuery.mockReset();
   mockConnect.mockReset().mockResolvedValue(mockClient);
   mockClient.query.mockReset();
@@ -37,13 +46,14 @@ describe('GET /properties', () => {
   it('returns properties list', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ id: 'p1', name: 'Beach House' }] });
     const app = buildApp();
-    const res = await request(app).get('/properties').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/properties');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].name).toBe('Beach House');
   });
 
   it('returns 401 without auth', async () => {
+    currentUser = null;
     const app = buildApp();
     const res = await request(app).get('/properties');
     expect(res.status).toBe(401);
@@ -54,7 +64,7 @@ describe('GET /properties/:propertyId', () => {
   it('returns a single property', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ id: 'p1', name: 'Beach House' }] });
     const app = buildApp();
-    const res = await request(app).get('/properties/p1').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/properties/p1');
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('p1');
   });
@@ -62,7 +72,7 @@ describe('GET /properties/:propertyId', () => {
   it('returns 404 for missing property', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
     const app = buildApp();
-    const res = await request(app).get('/properties/missing').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/properties/missing');
     expect(res.status).toBe(404);
   });
 });
@@ -73,7 +83,6 @@ describe('PATCH /properties/:propertyId', () => {
     const app = buildApp();
     const res = await request(app)
       .patch('/properties/p1')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ name: 'Updated', ical_url: 'https://test.com' });
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('Updated');
@@ -81,19 +90,14 @@ describe('PATCH /properties/:propertyId', () => {
 
   it('rejects empty body', async () => {
     const app = buildApp();
-    const res = await request(app)
-      .patch('/properties/p1')
-      .set('Authorization', `Bearer ${makeToken()}`)
-      .send({});
+    const res = await request(app).patch('/properties/p1').send({});
     expect(res.status).toBe(400);
   });
 
   it('rejects cleaner role', async () => {
+    currentUser = { userId: 'u1', role: 'cleaner', propertyIds: ['p1'] };
     const app = buildApp();
-    const res = await request(app)
-      .patch('/properties/p1')
-      .set('Authorization', `Bearer ${makeToken({ role: 'cleaner' })}`)
-      .send({ name: 'Hack' });
+    const res = await request(app).patch('/properties/p1').send({ name: 'Hack' });
     expect(res.status).toBe(403);
   });
 });
@@ -102,7 +106,7 @@ describe('GET /properties/:propertyId/rooms', () => {
   it('returns rooms for a property', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ id: 'r1', display_name: 'Kitchen', display_order: 0 }] });
     const app = buildApp();
-    const res = await request(app).get('/properties/p1/rooms').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/properties/p1/rooms');
     expect(res.status).toBe(200);
     expect(res.body[0].display_name).toBe('Kitchen');
   });
@@ -114,7 +118,6 @@ describe('POST /properties/:propertyId/rooms', () => {
     const app = buildApp();
     const res = await request(app)
       .post('/properties/p1/rooms')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ display_name: 'Living Room', slug: 'living-room' });
     expect(res.status).toBe(201);
     expect(res.body.display_name).toBe('Living Room');
@@ -128,12 +131,10 @@ describe('PATCH /properties/:propertyId/rooms/reorder', () => {
       .mockResolvedValueOnce({ rows: [] }) // UPDATE r1
       .mockResolvedValueOnce({ rows: [] }) // UPDATE r2
       .mockResolvedValueOnce(undefined); // COMMIT
-    // After COMMIT, route does pool.query for final SELECT
     mockQuery.mockResolvedValueOnce({ rows: [{ id: 'r1', display_order: 0 }, { id: 'r2', display_order: 1 }] });
     const app = buildApp();
     const res = await request(app)
       .patch('/properties/p1/rooms/reorder')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ room_ids: ['r1', 'r2'] });
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
@@ -142,10 +143,7 @@ describe('PATCH /properties/:propertyId/rooms/reorder', () => {
 
   it('rejects missing room_ids', async () => {
     const app = buildApp();
-    const res = await request(app)
-      .patch('/properties/p1/rooms/reorder')
-      .set('Authorization', `Bearer ${makeToken()}`)
-      .send({});
+    const res = await request(app).patch('/properties/p1/rooms/reorder').send({});
     expect(res.status).toBe(400);
   });
 });

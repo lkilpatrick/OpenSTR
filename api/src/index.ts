@@ -3,7 +3,8 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import authRouter from './routes/auth';
+import { toNodeHandler } from 'better-auth/node';
+import { auth } from './lib/auth';
 import propertiesRouter from './routes/properties';
 import usersRouter from './routes/users';
 import sessionsRouter from './routes/sessions';
@@ -26,6 +27,10 @@ app.use(cors({
   origin: process.env.ADMIN_URL ?? 'http://localhost:5173',
   credentials: true,
 }));
+
+// better-auth handler must come BEFORE express.json() middleware
+app.all('/api/auth/*', toNodeHandler(auth));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -33,7 +38,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/auth', authRouter);
 app.use('/properties', propertiesRouter);
 app.use('/users', usersRouter);
 app.use('/sessions', sessionsRouter);

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useSession } from './lib/auth-client';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import { PropertyProvider } from './components/PropertySwitcher';
@@ -15,8 +16,11 @@ import PropertiesPage from './pages/PropertiesPage';
 const queryClient = new QueryClient();
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('accessToken');
-  return token ? <>{children}</> : <Navigate to="/login" replace />;
+  const { data: session, isPending } = useSession();
+  if (isPending) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading...</div>;
+  }
+  return session?.user ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 export default function App() {

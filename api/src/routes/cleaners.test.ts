@@ -1,30 +1,39 @@
 import request from 'supertest';
 import express from 'express';
-import jwt from 'jsonwebtoken';
-
-process.env.JWT_SECRET = 'test-secret';
 
 const mockQuery = jest.fn();
 jest.mock('../db/pool', () => ({
   pool: { query: mockQuery },
 }));
 
-import cleanersRouter from './cleaners';
-import { requireAuth } from '../middleware/auth';
+jest.mock('../lib/auth', () => ({
+  auth: { api: { getSession: jest.fn() } },
+}));
 
-function makeToken(overrides: Record<string, unknown> = {}) {
-  return jwt.sign({ userId: 'u1', role: 'owner', propertyIds: ['p1'], ...overrides }, 'test-secret', { expiresIn: '5m' });
-}
+let currentUser: { userId: string; role: string; propertyIds: string[] } | null = null;
+
+jest.mock('../middleware/auth', () => {
+  const original = jest.requireActual('../middleware/auth');
+  return {
+    ...original,
+    requireAuth: (req: any, res: any, next: any) => {
+      if (currentUser) { req.user = currentUser; next(); }
+      else res.status(401).json({ error: 'Unauthorized' });
+    },
+  };
+});
+
+import cleanersRouter from './cleaners';
 
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use(requireAuth);
   app.use('/admin/cleaners', cleanersRouter);
   return app;
 }
 
 beforeEach(() => {
+  currentUser = { userId: 'u1', role: 'owner', propertyIds: ['p1'] };
   mockQuery.mockReset();
 });
 
@@ -34,15 +43,16 @@ describe('GET /admin/cleaners', () => {
       rows: [{ id: 'c1', name: 'Dallas', email: 'dallas@test.com', total_sessions: '5', avg_compliance: '92', assigned_properties: [] }],
     });
     const app = buildApp();
-    const res = await request(app).get('/admin/cleaners').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/admin/cleaners');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].name).toBe('Dallas');
   });
 
   it('rejects cleaner role', async () => {
+    currentUser = { userId: 'u1', role: 'cleaner', propertyIds: ['p1'] };
     const app = buildApp();
-    const res = await request(app).get('/admin/cleaners').set('Authorization', `Bearer ${makeToken({ role: 'cleaner' })}`);
+    const res = await request(app).get('/admin/cleaners');
     expect(res.status).toBe(403);
   });
 });
@@ -56,7 +66,7 @@ describe('GET /admin/cleaners/assignments/:propertyId', () => {
       ],
     });
     const app = buildApp();
-    const res = await request(app).get('/admin/cleaners/assignments/p1').set('Authorization', `Bearer ${makeToken()}`);
+    const res = await request(app).get('/admin/cleaners/assignments/p1');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
     expect(res.body[0].priority).toBe(0);
@@ -70,7 +80,6 @@ describe('PATCH /admin/cleaners/assignments/:id', () => {
     const app = buildApp();
     const res = await request(app)
       .patch('/admin/cleaners/assignments/a1')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ priority: 2 });
     expect(res.status).toBe(200);
     expect(res.body.priority).toBe(2);
@@ -80,7 +89,6 @@ describe('PATCH /admin/cleaners/assignments/:id', () => {
     const app = buildApp();
     const res = await request(app)
       .patch('/admin/cleaners/assignments/a1')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({});
     expect(res.status).toBe(400);
   });
@@ -90,7 +98,6 @@ describe('PATCH /admin/cleaners/assignments/:id', () => {
     const app = buildApp();
     const res = await request(app)
       .patch('/admin/cleaners/assignments/missing')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ priority: 0 });
     expect(res.status).toBe(404);
   });
@@ -102,7 +109,6 @@ describe('POST /admin/cleaners/assignments', () => {
     const app = buildApp();
     const res = await request(app)
       .post('/admin/cleaners/assignments')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ property_id: 'p1', user_id: 'c1', priority: 0, is_primary: true });
     expect(res.status).toBe(201);
     expect(res.body.property_id).toBe('p1');
@@ -112,7 +118,6 @@ describe('POST /admin/cleaners/assignments', () => {
     const app = buildApp();
     const res = await request(app)
       .post('/admin/cleaners/assignments')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ user_id: 'c1' });
     expect(res.status).toBe(400);
   });
@@ -121,7 +126,6 @@ describe('POST /admin/cleaners/assignments', () => {
     const app = buildApp();
     const res = await request(app)
       .post('/admin/cleaners/assignments')
-      .set('Authorization', `Bearer ${makeToken()}`)
       .send({ property_id: 'p1' });
     expect(res.status).toBe(400);
   });
