@@ -103,7 +103,7 @@ router.post('/:propertySlug/messages', async (req: Request, res: Response): Prom
   const result = await pool.query(
     `INSERT INTO guest_messages (property_id, sender_name, sender_email, subject, message, source)
      VALUES ($1, $2, $3, $4, $5, 'guest_web') RETURNING *`,
-    [propResult.rows[0].id, sender_name ?? null, sender_email ?? null, subject ?? null, message, 'guest_web']
+    [propResult.rows[0].id, sender_name ?? null, sender_email ?? null, subject ?? null, message]
   );
   res.status(201).json({ message: 'Message sent successfully', id: result.rows[0].id });
 });

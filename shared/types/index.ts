@@ -15,7 +15,7 @@ export interface User {
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
-export type PropertyType = 'short_term_rental' | 'private_home';
+export type PropertyType = 'short_term_rental' | 'residence';
 
 export interface Property {
   id: string;
@@ -64,7 +64,7 @@ export interface Task {
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
 
-export type SessionStatus = 'pending' | 'in_progress' | 'paused' | 'completed' | 'cancelled';
+export type SessionStatus = 'pending' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
 
 export interface CleanSession {
   id: string;
