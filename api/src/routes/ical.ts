@@ -21,16 +21,18 @@ router.post('/sync/:propertyId', async (req: AuthRequest, res: Response): Promis
   let skipped = 0;
 
   for (const event of events) {
-    const checkinDate = event.dtstart;
-    const checkoutDate = event.dtend;
-
     const result = await pool.query(
-      `INSERT INTO reservations (property_id, source, external_uid, checkin_date, checkout_date, summary, synced_at)
-       VALUES ($1, 'airbnb_ical', $2, $3, $4, $5, now())
+      `INSERT INTO reservations (property_id, source, external_uid, checkin_date, checkout_date,
+        summary, guest_name, phone, num_guests, description, location, is_blocked, synced_at)
+       VALUES ($1, 'airbnb_ical', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
        ON CONFLICT (external_uid) DO UPDATE
-         SET checkin_date = $3, checkout_date = $4, summary = $5, synced_at = now()
+         SET checkin_date = $3, checkout_date = $4, summary = $5,
+             guest_name = $6, phone = $7, num_guests = $8,
+             description = $9, location = $10, is_blocked = $11, synced_at = now()
        RETURNING (xmax = 0) as inserted`,
-      [property.id, event.uid, checkinDate, checkoutDate, event.summary]
+      [property.id, event.uid, event.dtstart, event.dtend, event.summary,
+       event.guest_name || null, event.phone || null, event.num_guests,
+       event.description || null, event.location || null, event.is_blocked]
     );
     if (result.rows[0]?.inserted) created++;
     else skipped++;
