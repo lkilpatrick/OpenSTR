@@ -8,7 +8,6 @@ import DashboardPage from './pages/DashboardPage';
 import SessionsPage from './pages/SessionsPage';
 import ChecklistsPage from './pages/ChecklistsPage';
 import IssuesPage from './pages/IssuesPage';
-import SuperhostPage from './pages/SuperhostPage';
 import CleanersPage from './pages/CleanersPage';
 import StandardsPage from './pages/StandardsPage';
 import PropertiesPage from './pages/PropertiesPage';
@@ -44,7 +43,6 @@ export default function App() {
             <Route path="sessions" element={<SessionsPage />} />
             <Route path="checklists" element={<ChecklistsPage />} />
             <Route path="issues" element={<IssuesPage />} />
-            <Route path="superhost" element={<SuperhostPage />} />
             <Route path="cleaners" element={<CleanersPage />} />
             <Route path="standards" element={<StandardsPage />} />
             <Route path="properties" element={<PropertiesPage />} />

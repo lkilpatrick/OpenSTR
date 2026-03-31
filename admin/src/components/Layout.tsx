@@ -51,7 +51,6 @@ const NAV_ITEMS = [
   { to: '/sessions', label: 'Sessions' },
   { to: '/checklists', label: 'Checklists' },
   { to: '/issues', label: 'Issues & Messages' },
-  { to: '/superhost', label: 'Superhost Tracker' },
   { to: '/cleaners', label: 'Cleaner Performance' },
   { to: '/standards', label: 'Standards' },
   { to: '/properties', label: 'Properties' },

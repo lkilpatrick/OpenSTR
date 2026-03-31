@@ -6,6 +6,12 @@ export const api = axios.create({
   timeout: 15000,
 });
 
+let onUnauthenticated: (() => void) | null = null;
+
+export function setOnUnauthenticated(cb: () => void): void {
+  onUnauthenticated = cb;
+}
+
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await getAccessToken();
   if (token) {
@@ -19,6 +25,7 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await clearAccessToken();
+      onUnauthenticated?.();
     }
     return Promise.reject(error);
   }

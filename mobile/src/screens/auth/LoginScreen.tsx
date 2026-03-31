@@ -19,8 +19,8 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
       Alert.alert('Error', 'Please enter email and password');
       return;
     }
-    await login(email.trim(), password);
-    if (!error) onLoginSuccess();
+    const success = await login(email.trim(), password);
+    if (success) onLoginSuccess();
   }
 
   return (
