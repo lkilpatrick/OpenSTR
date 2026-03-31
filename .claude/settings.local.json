@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(docker --version)",
+      "Bash(docker compose:*)",
+      "Bash(git --version)",
+      "Bash(gh --version)",
+      "Bash(npx expo:*)",
+      "Bash(npx react-native:*)",
+      "Bash(npm list:*)",
+      "Bash(gh issue:*)"
+    ]
+  }
+}

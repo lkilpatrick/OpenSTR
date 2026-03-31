@@ -1,0 +1,26 @@
+{
+  "name": "openstr",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "admin",
+    "mobile",
+    "shared"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=api",
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:mobile": "npm run start --workspace=mobile",
+    "db:migrate": "npm run db:migrate --workspace=api",
+    "db:rollback": "npm run db:rollback --workspace=api",
+    "db:seed": "npm run db:seed --workspace=api",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
