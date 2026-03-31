@@ -104,19 +104,6 @@ export interface Reservation {
   updatedAt: string;
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
-export interface AuthTokenPayload {
-  userId: string;
-  role: UserRole;
-  propertyIds: string[];
-}
-
-export interface LoginResponse {
-  accessToken: string;
-  user: Pick<User, 'id' | 'name' | 'email' | 'role'>;
-}
-
 // ─── API Responses ────────────────────────────────────────────────────────────
 
 export interface ApiError {

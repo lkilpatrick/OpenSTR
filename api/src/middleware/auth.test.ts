@@ -1,9 +1,10 @@
-import jwt from 'jsonwebtoken';
-import { requireAuth, requireRole, requirePropertyAccess } from './auth';
+jest.mock('../lib/auth', () => ({
+  auth: { api: { getSession: jest.fn() } },
+}));
+
+import { requireRole, requirePropertyAccess } from './auth';
 import type { AuthRequest } from './auth';
 import type { Response, NextFunction } from 'express';
-
-process.env.JWT_SECRET = 'test-secret';
 
 function mockRes() {
   const res: Partial<Response> = {};
@@ -16,33 +17,8 @@ function mockNext(): NextFunction {
   return jest.fn();
 }
 
-describe('requireAuth', () => {
-  it('passes with valid Bearer token', () => {
-    const payload = { userId: 'u1', role: 'owner', propertyIds: [] };
-    const token = jwt.sign(payload, 'test-secret', { expiresIn: '1m' });
-    const req = { headers: { authorization: `Bearer ${token}` } } as AuthRequest;
-    const res = mockRes();
-    const next = mockNext();
-    requireAuth(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(req.user?.userId).toBe('u1');
-  });
-
-  it('rejects missing token with 401', () => {
-    const req = { headers: {} } as AuthRequest;
-    const res = mockRes();
-    requireAuth(req, res, mockNext());
-    expect(res.status).toHaveBeenCalledWith(401);
-  });
-
-  it('rejects expired token with 401', () => {
-    const token = jwt.sign({ userId: 'u1', role: 'owner', propertyIds: [] }, 'test-secret', { expiresIn: -1 });
-    const req = { headers: { authorization: `Bearer ${token}` } } as AuthRequest;
-    const res = mockRes();
-    requireAuth(req, res, mockNext());
-    expect(res.status).toHaveBeenCalledWith(401);
-  });
-});
+// requireAuth is async and calls auth.api.getSession() — tested via integration/route tests.
+// Here we unit-test requireRole and requirePropertyAccess which are synchronous.
 
 describe('requireRole', () => {
   it('passes when user has required role', () => {
@@ -58,12 +34,36 @@ describe('requireRole', () => {
     requireRole('owner')(req, res, mockNext());
     expect(res.status).toHaveBeenCalledWith(403);
   });
+
+  it('accepts multiple allowed roles', () => {
+    const req = { user: { userId: 'u1', role: 'admin', propertyIds: [] } } as unknown as AuthRequest;
+    const next = mockNext();
+    requireRole('owner', 'admin')(req, mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('rejects when user is missing', () => {
+    const req = {} as unknown as AuthRequest;
+    const res = mockRes();
+    requireRole('owner')(req, res, mockNext());
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
 });
 
 describe('requirePropertyAccess', () => {
   it('allows owner access to any property', () => {
     const req = {
       user: { userId: 'u1', role: 'owner', propertyIds: [] },
+      params: { propertyId: 'prop-999' },
+    } as unknown as AuthRequest;
+    const next = mockNext();
+    requirePropertyAccess()(req, mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('allows admin access to any property', () => {
+    const req = {
+      user: { userId: 'u1', role: 'admin', propertyIds: [] },
       params: { propertyId: 'prop-999' },
     } as unknown as AuthRequest;
     const next = mockNext();

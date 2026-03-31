@@ -1,10 +1,16 @@
 import { useState, useCallback } from 'react';
 import { api } from '../lib/api';
 import { saveAccessToken, clearAccessToken, getAccessToken } from '../lib/storage';
-import type { LoginResponse, User } from '@openstr/shared';
+
+interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
 
 export function useAuth() {
-  const [user, setUser] = useState<Pick<User, 'id' | 'name' | 'email' | 'role'> | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -12,9 +18,11 @@ export function useAuth() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.post<LoginResponse>('/auth/login', { email, password });
-      await saveAccessToken(data.accessToken);
-      setUser(data.user);
+      // better-auth sign-in endpoint (cookie-based)
+      const { data } = await api.post('/api/auth/sign-in/email', { email, password });
+      const session = data as { token?: string; user?: AuthUser };
+      if (session.token) await saveAccessToken(session.token);
+      if (session.user) setUser(session.user);
     } catch {
       setError('Invalid email or password');
     } finally {
@@ -23,7 +31,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await api.post('/auth/logout').catch(() => {});
+    await api.post('/api/auth/sign-out').catch(() => {});
     await clearAccessToken();
     setUser(null);
   }, []);

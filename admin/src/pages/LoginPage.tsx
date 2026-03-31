@@ -6,17 +6,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       await login(email, password);
       navigate('/dashboard');
     } catch {
       setError('Invalid email or password');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -34,7 +38,7 @@ export default function LoginPage() {
 
         {error && <p style={{ color: '#d32f2f', marginBottom: 12, fontSize: 14 }}>{error}</p>}
 
-        <button type="submit" style={btnStyle}>Sign In</button>
+        <button type="submit" style={btnStyle} disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
       </form>
     </div>
   );
