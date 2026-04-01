@@ -48,13 +48,13 @@ export default function Layout() {
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/sessions', label: 'Sessions' },
+  { to: '/cleanings', label: 'Cleanings' },
+  { to: '/team', label: 'Team' },
   { to: '/checklists', label: 'Checklists' },
-  { to: '/issues', label: 'Issues & Messages' },
-  { to: '/cleaners', label: 'Cleaner Performance' },
+  { to: '/issues', label: 'Issues' },
+  { to: '/cleaners', label: 'Cleaner Pay' },
   { to: '/standards', label: 'Standards' },
   { to: '/properties', label: 'Properties' },
-  { to: '/team', label: 'Team' },
 ];
 
 function navStyle(isActive: boolean): React.CSSProperties {

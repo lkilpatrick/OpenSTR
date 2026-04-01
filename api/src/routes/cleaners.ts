@@ -9,17 +9,19 @@ router.use(requireRole('owner', 'admin'));
 // GET /admin/cleaners — list cleaners with summary stats
 router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
   const result = await pool.query(
-    `SELECT u.id, u.name, u.email, u.active,
+    `SELECT u.id, u.name, u.email, u.active, u.cleaning_rate,
             COALESCE(stats.total_sessions, 0) as total_sessions,
             COALESCE(stats.avg_compliance, 0) as avg_compliance,
             stats.last_session_date,
+            COALESCE(stats.ytd_sessions, 0) as ytd_sessions,
             COALESCE(props.properties, '[]') as assigned_properties
      FROM users u
      LEFT JOIN LATERAL (
        SELECT COUNT(*) as total_sessions,
               AVG(cs.compliance_score) as avg_compliance,
-              MAX(cs.created_at) as last_session_date
-       FROM clean_sessions cs WHERE cs.cleaner_id = u.id
+              MAX(cs.created_at) as last_session_date,
+              COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM cs.created_at) = EXTRACT(YEAR FROM NOW())) as ytd_sessions
+       FROM clean_sessions cs WHERE cs.cleaner_id = u.id AND cs.status IN ('approved', 'submitted')
      ) stats ON true
      LEFT JOIN LATERAL (
        SELECT json_agg(json_build_object('id', p.id, 'name', p.name)) as properties

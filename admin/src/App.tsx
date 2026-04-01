@@ -5,7 +5,7 @@ import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import { PropertyProvider } from './components/PropertySwitcher';
 import DashboardPage from './pages/DashboardPage';
-import SessionsPage from './pages/SessionsPage';
+import CleaningsPage from './pages/CleaningsPage';
 import ChecklistsPage from './pages/ChecklistsPage';
 import IssuesPage from './pages/IssuesPage';
 import CleanersPage from './pages/CleanersPage';
@@ -41,7 +41,7 @@ export default function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="sessions" element={<SessionsPage />} />
+            <Route path="cleanings" element={<CleaningsPage />} />
             <Route path="checklists" element={<ChecklistsPage />} />
             <Route path="issues" element={<IssuesPage />} />
             <Route path="cleaners" element={<CleanersPage />} />
