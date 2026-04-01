@@ -123,8 +123,8 @@ async function main() {
   // ── Properties ───────────────────────────────────────────────────────────
   await pool.query(`
     INSERT INTO properties (id, name, type, address, standard_id, active) VALUES
-      ($1, 'Ocean View BNB', 'short_term_rental', '123 Ocean Drive, Malibu, CA', $3, true),
-      ($2, 'Upstairs', 'private_home', '456 Hilltop Lane, Malibu, CA', $4, true)
+      ($1, 'Ocean View BNB', 'short_term_rental', '100 Oceanfront Drive, Seaside, CA', $3, true),
+      ($2, 'Upstairs', 'private_home', '100 Oceanfront Drive, Seaside, CA', $4, true)
   `, [PROP.OCEAN_VIEW, PROP.UPSTAIRS, STD.AIRBNB, STD.HOME]);
   console.log('✅ Properties seeded');
 

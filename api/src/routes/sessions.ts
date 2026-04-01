@@ -191,6 +191,48 @@ router.post('/:sessionId/rating', async (req: AuthRequest, res: Response): Promi
   res.status(201).json(result.rows[0]);
 });
 
+// DELETE /sessions/:sessionId — delete a session and its related data (owner/admin only)
+router.delete('/:sessionId', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Delete child data first
+    await client.query(
+      `DELETE FROM task_completions WHERE room_clean_id IN (SELECT id FROM room_cleans WHERE session_id = $1)`,
+      [req.params.sessionId]
+    );
+    await client.query(
+      `DELETE FROM photos WHERE room_clean_id IN (SELECT id FROM room_cleans WHERE session_id = $1)`,
+      [req.params.sessionId]
+    );
+    await client.query(`DELETE FROM room_cleans WHERE session_id = $1`, [req.params.sessionId]);
+    await client.query(`DELETE FROM guest_ratings WHERE session_id = $1`, [req.params.sessionId]);
+    await client.query(`DELETE FROM issues WHERE session_id = $1`, [req.params.sessionId]);
+    const result = await client.query(`DELETE FROM clean_sessions WHERE id = $1 RETURNING id`, [req.params.sessionId]);
+    await client.query('COMMIT');
+    if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+    res.json({ message: 'Session deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+// GET /sessions/room-cleans/:roomCleanId/tasks — task completions for a room clean
+router.get('/room-cleans/:roomCleanId/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(
+    `SELECT tc.id, tc.task_id, t.label, tc.completed, tc.notes, tc.quantity_value, tc.supply_replenished
+     FROM task_completions tc
+     JOIN tasks t ON t.id = tc.task_id
+     WHERE tc.room_clean_id = $1
+     ORDER BY t.display_order`,
+    [req.params.roomCleanId]
+  );
+  res.json(result.rows);
+});
+
 // GET /sessions/:sessionId/rooms — room cleans with task completions
 router.get('/:sessionId/rooms', async (req: AuthRequest, res: Response): Promise<void> => {
   const rooms = await pool.query(

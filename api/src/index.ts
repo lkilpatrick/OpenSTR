@@ -23,7 +23,17 @@ const PORT = process.env.PORT ?? 3000;
 
 app.use(helmet());
 app.use(cors({
-  origin: process.env.ADMIN_URL ?? 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow any localhost origin in development
+    if (!origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+      callback(null, origin ?? true);
+    } else if (process.env.ALLOWED_ORIGINS) {
+      const allowed = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim());
+      callback(null, allowed.includes(origin) ? origin : false);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
 }));
 

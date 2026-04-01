@@ -54,6 +54,7 @@ const NAV_ITEMS = [
   { to: '/cleaners', label: 'Cleaner Performance' },
   { to: '/standards', label: 'Standards' },
   { to: '/properties', label: 'Properties' },
+  { to: '/team', label: 'Team' },
 ];
 
 function navStyle(isActive: boolean): React.CSSProperties {

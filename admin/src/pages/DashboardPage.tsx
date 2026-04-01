@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { api } from '../lib/api';
 import { useSelectedProperty } from '../components/PropertySwitcher';
@@ -54,6 +54,11 @@ function fmtShort(s: string) {
 export default function DashboardPage() {
   const { propertyId } = useSelectedProperty();
   const [monthOffset, setMonthOffset] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [showAddReservation, setShowAddReservation] = useState(false);
+  const [editingRes, setEditingRes] = useState<Reservation | null>(null);
+  const [resForm, setResForm] = useState({ checkin_date: '', checkout_date: '', guest_name: '', phone: '', num_guests: '', is_blocked: false });
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const viewMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
@@ -76,6 +81,48 @@ export default function DashboardPage() {
       return data;
     },
     enabled: !!propertyId,
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.post(`/ical/sync/${propertyId}`),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      const d = res.data as { synced: number; created: number; updated: number };
+      setSyncStatus(`Synced ${d.synced} events (${d.created} new, ${d.updated} updated)`);
+      setTimeout(() => setSyncStatus(null), 5000);
+    },
+    onError: (err: any) => {
+      setSyncStatus(err.response?.data?.error ?? 'Sync failed');
+      setTimeout(() => setSyncStatus(null), 5000);
+    },
+  });
+
+  const createResMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.post(`/ical/reservations/${propertyId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      setShowAddReservation(false);
+      setResForm({ checkin_date: '', checkout_date: '', guest_name: '', phone: '', num_guests: '', is_blocked: false });
+    },
+  });
+
+  const updateResMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      api.patch(`/ical/reservations/${propertyId}/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      setEditingRes(null);
+    },
+  });
+
+  const deleteResMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/ical/reservations/${propertyId}/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reservations'] }),
+  });
+
+  const clearAllResMutation = useMutation({
+    mutationFn: () => api.delete(`/ical/reservations/${propertyId}/all`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reservations'] }),
   });
 
   // Calendar grid: array of weeks, each week is 7 date strings (or null for padding)
@@ -212,6 +259,29 @@ export default function DashboardPage() {
         <StatCard label="Awaiting Review" value={reviewCount} color="#8b5cf6" />
       </div>
 
+      {/* iCal Sync Controls */}
+      <div style={{ background: '#fff', borderRadius: 12, padding: '16px 24px', boxShadow: '0 1px 4px rgba(0,0,0,.08)', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Airbnb Calendar Sync</span>
+          <span style={{ fontSize: 12, color: '#64748b', marginLeft: 12 }}>{(reservations ?? []).length} reservations</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {syncStatus && <span style={{ fontSize: 12, color: syncStatus.includes('failed') ? '#ef4444' : '#10b981' }}>{syncStatus}</span>}
+          <button onClick={() => setShowAddReservation(true)}
+            style={{ background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + Add Booking
+          </button>
+          <button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}
+            style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: syncMutation.isPending ? 0.6 : 1 }}>
+            {syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+          </button>
+          <button onClick={() => { if (confirm('Clear all reservations for this property? This cannot be undone.')) clearAllResMutation.mutate(); }}
+            style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Clear All
+          </button>
+        </div>
+      </div>
+
       {/* Calendar */}
       <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,.08)', marginBottom: 24 }}>
         {/* Month nav */}
@@ -331,6 +401,7 @@ export default function DashboardPage() {
                 <th style={thStyle}>Nights</th>
                 <th style={thStyle}>Assigned Cleaner</th>
                 <th style={thStyle}>Status</th>
+                <th style={thStyle}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -374,6 +445,14 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button onClick={() => { setEditingRes(r); setResForm({ checkin_date: r.checkin_date.slice(0,10), checkout_date: r.checkout_date.slice(0,10), guest_name: r.guest_name ?? '', phone: r.phone ?? '', num_guests: r.num_guests?.toString() ?? '', is_blocked: r.is_blocked }); }}
+                          style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
+                        <button onClick={() => { if (confirm('Delete this reservation?')) deleteResMutation.mutate(r.id); }}
+                          style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Del</button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -381,6 +460,67 @@ export default function DashboardPage() {
           </table>
         )}
       </div>
+
+      {/* Add reservation modal */}
+      {showAddReservation && (
+        <div style={overlayStyle} onClick={() => setShowAddReservation(false)}>
+          <div style={modalStyle} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>Add Booking</h2>
+            <label style={lblSt}>Check-in Date *</label>
+            <input type="date" value={resForm.checkin_date} onChange={e => setResForm({ ...resForm, checkin_date: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Check-out Date *</label>
+            <input type="date" value={resForm.checkout_date} onChange={e => setResForm({ ...resForm, checkout_date: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Guest Name</label>
+            <input value={resForm.guest_name} onChange={e => setResForm({ ...resForm, guest_name: e.target.value })} style={inpSt} placeholder="Guest name" />
+            <label style={lblSt}>Phone</label>
+            <input value={resForm.phone} onChange={e => setResForm({ ...resForm, phone: e.target.value })} style={inpSt} placeholder="Phone" />
+            <label style={lblSt}>Number of Guests</label>
+            <input type="number" value={resForm.num_guests} onChange={e => setResForm({ ...resForm, num_guests: e.target.value })} style={inpSt} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>
+              <input type="checkbox" checked={resForm.is_blocked} onChange={e => setResForm({ ...resForm, is_blocked: e.target.checked })} />
+              Blocked dates (owner block)
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setShowAddReservation(false)} style={{ background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Cancel</button>
+              <button disabled={!resForm.checkin_date || !resForm.checkout_date}
+                onClick={() => createResMutation.mutate({ checkin_date: resForm.checkin_date, checkout_date: resForm.checkout_date, guest_name: resForm.guest_name || null, phone: resForm.phone || null, num_guests: resForm.num_guests ? parseInt(resForm.num_guests) : null, is_blocked: resForm.is_blocked, summary: resForm.is_blocked ? 'Blocked' : (resForm.guest_name || 'Manual booking') })}
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}>
+                Add Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit reservation modal */}
+      {editingRes && (
+        <div style={overlayStyle} onClick={() => setEditingRes(null)}>
+          <div style={modalStyle} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>Edit Reservation</h2>
+            <label style={lblSt}>Check-in Date</label>
+            <input type="date" value={resForm.checkin_date} onChange={e => setResForm({ ...resForm, checkin_date: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Check-out Date</label>
+            <input type="date" value={resForm.checkout_date} onChange={e => setResForm({ ...resForm, checkout_date: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Guest Name</label>
+            <input value={resForm.guest_name} onChange={e => setResForm({ ...resForm, guest_name: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Phone</label>
+            <input value={resForm.phone} onChange={e => setResForm({ ...resForm, phone: e.target.value })} style={inpSt} />
+            <label style={lblSt}>Number of Guests</label>
+            <input type="number" value={resForm.num_guests} onChange={e => setResForm({ ...resForm, num_guests: e.target.value })} style={inpSt} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>
+              <input type="checkbox" checked={resForm.is_blocked} onChange={e => setResForm({ ...resForm, is_blocked: e.target.checked })} />
+              Blocked dates
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setEditingRes(null)} style={{ background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => updateResMutation.mutate({ id: editingRes.id, data: { checkin_date: resForm.checkin_date, checkout_date: resForm.checkout_date, guest_name: resForm.guest_name || null, phone: resForm.phone || null, num_guests: resForm.num_guests ? parseInt(resForm.num_guests) : null, is_blocked: resForm.is_blocked } })}
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -405,3 +545,7 @@ const navBtn: React.CSSProperties = {
 };
 const thStyle: React.CSSProperties = { padding: '8px 10px', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' };
 const tdStyle: React.CSSProperties = { padding: '10px 10px' };
+const overlayStyle: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 };
+const modalStyle: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 32, width: 460, maxHeight: '90vh', overflowY: 'auto' };
+const lblSt: React.CSSProperties = { display: 'block', fontWeight: 500, fontSize: 13, marginBottom: 4, color: '#374151' };
+const inpSt: React.CSSProperties = { display: 'block', width: '100%', padding: '8px 10px', marginBottom: 14, border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' };

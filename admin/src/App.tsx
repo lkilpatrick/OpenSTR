@@ -11,6 +11,7 @@ import IssuesPage from './pages/IssuesPage';
 import CleanersPage from './pages/CleanersPage';
 import StandardsPage from './pages/StandardsPage';
 import PropertiesPage from './pages/PropertiesPage';
+import TeamPage from './pages/TeamPage';
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="cleaners" element={<CleanersPage />} />
             <Route path="standards" element={<StandardsPage />} />
             <Route path="properties" element={<PropertiesPage />} />
+            <Route path="team" element={<TeamPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

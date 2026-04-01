@@ -20,8 +20,16 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
 // PATCH /messages/:id/read
 router.patch('/:id/read', async (req: AuthRequest, res: Response): Promise<void> => {
-  await pool.query(`UPDATE guest_messages SET read = true WHERE id = $1`, [req.params.id]);
-  res.json({ message: 'Marked as read' });
+  const { read } = req.body as { read?: boolean };
+  await pool.query(`UPDATE guest_messages SET read = $1 WHERE id = $2`, [read ?? true, req.params.id]);
+  res.json({ message: read === false ? 'Marked as unread' : 'Marked as read' });
+});
+
+// DELETE /messages/:id
+router.delete('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(`DELETE FROM guest_messages WHERE id = $1 RETURNING id`, [req.params.id]);
+  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  res.json({ message: 'Message deleted' });
 });
 
 export default router;

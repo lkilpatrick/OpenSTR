@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { bearer } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import bcrypt from 'bcrypt';
 
@@ -83,12 +84,24 @@ export const auth = betterAuth({
       updatedAt: 'updated_at',
     },
   },
+  plugins: [bearer()],
   advanced: {
     database: {
       generateId: () => crypto.randomUUID(),
     },
   },
-  trustedOrigins: [
-    process.env.ADMIN_URL ?? 'http://localhost:5173',
-  ],
+  trustedOrigins: (request?: Request) => {
+    const origins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      ...(process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) ?? []),
+    ];
+    const origin = request?.headers?.get?.('origin') ?? '';
+    // Allow any localhost origin in development
+    if (origin && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+      origins.push(origin);
+    }
+    return origins;
+  },
+  basePath: '/api/auth',
 });

@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 interface Property {
   id: string;
   name: string;
-  type: 'str' | 'residence';
+  type: 'short_term_rental' | 'residence';
   address?: string;
   slug?: string;
   active: boolean;
@@ -18,7 +18,7 @@ interface Property {
 interface WizardState {
   step: number;
   name: string;
-  type: 'str' | 'residence';
+  type: 'short_term_rental' | 'residence';
   address: string;
   slug: string;
   ical_url: string;
@@ -26,7 +26,7 @@ interface WizardState {
   standard_id: string;
 }
 
-const INITIAL_WIZARD: WizardState = { step: 1, name: '', type: 'str', address: '', slug: '', ical_url: '', rooms: ['Kitchen', 'Living Room', 'Bathroom', 'Bedroom'], standard_id: '' };
+const INITIAL_WIZARD: WizardState = { step: 1, name: '', type: 'short_term_rental', address: '', slug: '', ical_url: '', rooms: ['Kitchen', 'Living Room', 'Bathroom', 'Bedroom'], standard_id: '' };
 
 export default function PropertiesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function PropertiesPage() {
             style={{ background: '#fff', borderRadius: 12, padding: 20, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.08)', transition: 'transform .15s', position: 'relative' }}>
             <div style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: '50%', background: p.active ? '#10b981' : '#ef4444' }} />
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{p.name}</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{p.type === 'str' ? 'Short-Term Rental' : 'Residence'}</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>{p.type === 'short_term_rental' ? 'Short-Term Rental' : 'Residence'}</div>
             {p.address && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{p.address}</div>}
           </div>
         ))}
@@ -134,7 +134,7 @@ export default function PropertiesPage() {
                   <label style={{ display: 'block', fontWeight: 500, fontSize: 13, marginBottom: 4, color: '#374151' }}>Type</label>
                   <select value={selected.type} onChange={e => updateMutation.mutate({ id: selected.id, data: { type: e.target.value } })}
                     style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14 }}>
-                    <option value="str">Short-Term Rental</option>
+                    <option value="short_term_rental">Short-Term Rental</option>
                     <option value="residence">Residence</option>
                   </select>
                 </div>
@@ -165,8 +165,8 @@ export default function PropertiesPage() {
                 <label style={lblSt}>Property Name *</label>
                 <input value={wizard.name} onChange={e => setWizard({ ...wizard, name: e.target.value })} style={inpSt} placeholder="Beach House" />
                 <label style={lblSt}>Type</label>
-                <select value={wizard.type} onChange={e => setWizard({ ...wizard, type: e.target.value as 'str' | 'residence' })} style={inpSt}>
-                  <option value="str">Short-Term Rental</option>
+                <select value={wizard.type} onChange={e => setWizard({ ...wizard, type: e.target.value as 'short_term_rental' | 'residence' })} style={inpSt}>
+                  <option value="short_term_rental">Short-Term Rental</option>
                   <option value="residence">Residence</option>
                 </select>
                 <label style={lblSt}>Address</label>
@@ -191,7 +191,7 @@ export default function PropertiesPage() {
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, marginTop: 12 }}>
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>Summary</div>
                   <div style={{ fontSize: 13 }}>Name: {wizard.name}</div>
-                  <div style={{ fontSize: 13 }}>Type: {wizard.type === 'str' ? 'Short-Term Rental' : 'Residence'}</div>
+                  <div style={{ fontSize: 13 }}>Type: {wizard.type === 'short_term_rental' ? 'Short-Term Rental' : 'Residence'}</div>
                   <div style={{ fontSize: 13 }}>Rooms: {wizard.rooms.filter(r => r.trim()).length}</div>
                 </div>
               </div>

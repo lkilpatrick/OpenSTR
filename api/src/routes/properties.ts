@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { pool } from '../db/pool';
 import { requireAuth, requireRole, requirePropertyAccess, type AuthRequest } from '../middleware/auth';
+import { syncPropertyIcal } from './ical';
 
 const router = Router();
 router.use(requireAuth);
@@ -8,8 +9,8 @@ router.use(requireAuth);
 // GET /properties
 router.get('/', requireRole('owner', 'admin'), async (_req, res: Response): Promise<void> => {
   const result = await pool.query(
-    `SELECT id, name, type, address, lock_entity_id, session_trigger_time,
-            min_turnaround_hours, active, created_at, updated_at
+    `SELECT id, name, type, address, ical_url, lock_entity_id, session_trigger_time,
+            min_turnaround_hours, active, standard_id, created_at, updated_at
      FROM properties ORDER BY name`
   );
   res.json(result.rows);
@@ -29,18 +30,30 @@ router.get('/:propertyId', requirePropertyAccess(), async (req: AuthRequest, res
 
 // POST /properties
 router.post('/', requireRole('owner'), async (req: AuthRequest, res: Response): Promise<void> => {
-  const { name, type, address, lock_entity_id, session_trigger_time, min_turnaround_hours } = req.body;
+  const { name, type, address, slug, lock_entity_id, session_trigger_time, min_turnaround_hours, ical_url,
+          welcome_message, house_rules, checkin_instructions, checkout_instructions, wifi_password } = req.body;
   const result = await pool.query(
-    `INSERT INTO properties (name, type, address, lock_entity_id, session_trigger_time, min_turnaround_hours)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [name, type ?? 'short_term_rental', address, lock_entity_id, session_trigger_time ?? '10:00', min_turnaround_hours ?? 3]
+    `INSERT INTO properties (name, type, address, slug, lock_entity_id, session_trigger_time, min_turnaround_hours, ical_url,
+      welcome_message, house_rules, checkin_instructions, checkout_instructions, wifi_password)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    [name, type ?? 'short_term_rental', address, slug ?? null, lock_entity_id,
+     session_trigger_time ?? '10:00', min_turnaround_hours ?? 3, ical_url ?? null,
+     welcome_message ?? null, house_rules ?? null, checkin_instructions ?? null,
+     checkout_instructions ?? null, wifi_password ?? null]
   );
-  res.status(201).json(result.rows[0]);
+  const property = result.rows[0];
+  // Auto-sync iCal if URL was provided
+  if (ical_url) {
+    try { await syncPropertyIcal(property.id); } catch { /* sync errors are non-fatal */ }
+  }
+  res.status(201).json(property);
 });
 
 // PATCH /properties/:propertyId
 router.patch('/:propertyId', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
-  const fields = ['name', 'type', 'address', 'lock_entity_id', 'session_trigger_time', 'min_turnaround_hours', 'active', 'ical_url'];
+  const fields = ['name', 'type', 'address', 'slug', 'lock_entity_id', 'session_trigger_time',
+                  'min_turnaround_hours', 'active', 'ical_url', 'welcome_message', 'house_rules',
+                  'checkin_instructions', 'checkout_instructions', 'wifi_password'];
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
@@ -58,7 +71,55 @@ router.patch('/:propertyId', requireRole('owner', 'admin'), async (req: AuthRequ
     values
   );
   if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  // Auto-sync iCal whenever ical_url is set/changed
+  if (req.body.ical_url && req.body.ical_url.trim()) {
+    try { await syncPropertyIcal(req.params.propertyId); } catch { /* sync errors are non-fatal */ }
+  }
   res.json(result.rows[0]);
+});
+
+// DELETE /properties/:propertyId — hard delete a property and all related data (owner only)
+router.delete('/:propertyId', requireRole('owner'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM task_completions WHERE room_clean_id IN (
+        SELECT rc.id FROM room_cleans rc JOIN clean_sessions cs ON cs.id = rc.session_id WHERE cs.property_id = $1)`,
+      [req.params.propertyId]
+    );
+    await client.query(
+      `DELETE FROM photos WHERE room_clean_id IN (
+        SELECT rc.id FROM room_cleans rc JOIN clean_sessions cs ON cs.id = rc.session_id WHERE cs.property_id = $1)`,
+      [req.params.propertyId]
+    );
+    await client.query(
+      `DELETE FROM room_cleans WHERE session_id IN (SELECT id FROM clean_sessions WHERE property_id = $1)`,
+      [req.params.propertyId]
+    );
+    await client.query(
+      `DELETE FROM guest_ratings WHERE session_id IN (SELECT id FROM clean_sessions WHERE property_id = $1)`,
+      [req.params.propertyId]
+    );
+    await client.query(
+      `DELETE FROM issues WHERE session_id IN (SELECT id FROM clean_sessions WHERE property_id = $1)`,
+      [req.params.propertyId]
+    );
+    await client.query(`DELETE FROM clean_sessions WHERE property_id = $1`, [req.params.propertyId]);
+    await client.query(`DELETE FROM tasks WHERE property_id = $1`, [req.params.propertyId]);
+    await client.query(`DELETE FROM rooms WHERE property_id = $1`, [req.params.propertyId]);
+    await client.query(`DELETE FROM property_cleaners WHERE property_id = $1`, [req.params.propertyId]);
+    await client.query(`DELETE FROM reservations WHERE property_id = $1`, [req.params.propertyId]);
+    const result = await client.query(`DELETE FROM properties WHERE id = $1 RETURNING id`, [req.params.propertyId]);
+    await client.query('COMMIT');
+    if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+    res.json({ message: 'Property deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // GET /properties/:propertyId/rooms

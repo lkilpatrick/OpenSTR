@@ -80,7 +80,8 @@ export default function SessionsPage() {
   const { data: roomTasks } = useQuery<TaskCompletion[]>({
     queryKey: ['room-tasks', expandedRoom],
     queryFn: async () => {
-      const { data } = await api.get<TaskCompletion[]>(`/photos/${expandedRoom}/tasks`);
+      // Fetch task completions joined with task labels for this room clean
+      const { data } = await api.get<TaskCompletion[]>(`/sessions/room-cleans/${expandedRoom}/tasks`);
       return data;
     },
     enabled: !!expandedRoom,
@@ -95,6 +96,14 @@ export default function SessionsPage() {
       setRejectId(null);
       setRejectReason('');
       setBulkSelected(new Set());
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/sessions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions-all'] });
+      setSelected(null);
     },
   });
 
@@ -268,6 +277,8 @@ export default function SessionsPage() {
                   style={{ ...actionBtn, background: '#ef4444' }}>Reject</button>
               </>
             )}
+            <button onClick={() => { if (confirm('Delete this session and all its data? This cannot be undone.')) deleteMutation.mutate(selected.id); }}
+              style={{ ...actionBtn, background: '#991b1b' }}>Delete</button>
             <button onClick={() => { setSelected(null); setExpandedRoom(null); }}
               style={{ ...actionBtn, background: '#6b7280' }}>Close</button>
           </div>
