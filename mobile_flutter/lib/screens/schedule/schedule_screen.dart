@@ -107,6 +107,53 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
   }
 
+  Future<void> _claimClean(UpcomingClean clean) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Claim This Clean'),
+        content: Text(
+          'Assign yourself to clean ${clean.propertyName} on ${_formatDate(clean.checkoutDate)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Claim'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await _api.dio.post(
+        '/sessions/claim',
+        data: {
+          'property_id': clean.propertyId,
+          'reservation_id': clean.reservationId,
+          'scheduled_date': clean.checkoutDate,
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Clean claimed! You can start when ready.'),
+          ),
+        );
+      }
+      _fetchUpcoming();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not claim this clean')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -225,6 +272,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final hasSession = clean.sessionId != null;
     final isPending = clean.sessionStatus == 'pending';
     final isAccepted = clean.sessionStatus == 'accepted';
+    final isInProgress = clean.sessionStatus == 'in_progress';
+    final canOpen = (isAccepted || isInProgress) && clean.sessionId != null;
     final nights = _nightsBetween(clean.checkinDate, clean.checkoutDate);
     final guestLabel = clean.guestName ?? clean.summary ?? 'Guest';
 
@@ -241,7 +290,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         children: [
           InkWell(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            onTap: isAccepted
+            onTap: canOpen
                 ? () => Navigator.of(
                     context,
                   ).pushNamed('/session', arguments: clean.sessionId)
@@ -468,6 +517,47 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   child: const Text(
                     'Start Clean →',
                     style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ),
+          // Continue button for in-progress sessions
+          if (isInProgress && clean.sessionId != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).pushNamed('/session', arguments: clean.sessionId),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Continue Clean →',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ),
+          // Claim button for unassigned cleans (no session yet)
+          if (!hasSession)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _claimClean(clean),
+                  icon: const Icon(Icons.back_hand, size: 18),
+                  label: const Text(
+                    'Claim This Clean',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OceanTheme.primary,
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ),
