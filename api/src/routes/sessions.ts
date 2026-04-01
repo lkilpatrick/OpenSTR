@@ -85,6 +85,43 @@ router.delete('/notes/:noteId', requireRole('owner', 'admin'), async (req: AuthR
   res.json({ message: 'Note deleted' });
 });
 
+// GET /sessions/upcoming-cleans — upcoming cleaning days from reservation checkout dates
+// NOTE: Must be registered BEFORE /:sessionId to avoid Express matching "upcoming-cleans" as a sessionId
+router.get('/upcoming-cleans', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { property_id } = req.query;
+  const conditions = [`r.checkout_date >= CURRENT_DATE`, `r.is_blocked = false`];
+  const values: unknown[] = [];
+  let idx = 1;
+
+  if (property_id) {
+    conditions.push(`r.property_id = $${idx++}`);
+    values.push(property_id);
+  }
+
+  // Cleaners only see their assigned properties
+  if (req.user!.role === 'cleaner') {
+    conditions.push(`r.property_id IN (SELECT property_id FROM property_cleaners WHERE user_id = $${idx++} AND is_active = true)`);
+    values.push(req.user!.userId);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const result = await pool.query(
+    `SELECT r.id as reservation_id, r.checkin_date, r.checkout_date, r.guest_name, r.summary, r.num_guests,
+            p.id as property_id, p.name as property_name,
+            cs.id as session_id, cs.status as session_status, cs.cleaner_id, cs.session_type, cs.scheduled_date,
+            u.name as cleaner_name
+     FROM reservations r
+     JOIN properties p ON p.id = r.property_id
+     LEFT JOIN clean_sessions cs ON cs.reservation_id = r.id
+     LEFT JOIN users u ON u.id = cs.cleaner_id
+     ${where}
+     ORDER BY r.checkout_date ASC
+     LIMIT 30`,
+    values
+  );
+  res.json(result.rows);
+});
+
 // GET /sessions/room-cleans/:roomCleanId/tasks — task completions for a room clean
 // NOTE: Must be registered BEFORE /:sessionId to avoid Express matching "room-cleans" as a sessionId
 router.get('/room-cleans/:roomCleanId/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
