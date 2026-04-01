@@ -12,42 +12,24 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   final _api = ApiService();
-  List<CleanSession> _sessions = [];
+  List<UpcomingClean> _cleans = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchSessions();
+    _fetchUpcoming();
   }
 
-  Future<void> _fetchSessions() async {
+  Future<void> _fetchUpcoming() async {
     setState(() => _loading = true);
     try {
-      // Fetch pending and accepted sessions
-      final pendingRes = await _api.dio.get(
-        '/sessions',
-        queryParameters: {'status': 'pending'},
-      );
-      final acceptedRes = await _api.dio.get(
-        '/sessions',
-        queryParameters: {'status': 'accepted'},
-      );
-      final pending = (pendingRes.data as List).map(
-        (e) => CleanSession.fromJson(e as Map<String, dynamic>),
-      );
-      final accepted = (acceptedRes.data as List).map(
-        (e) => CleanSession.fromJson(e as Map<String, dynamic>),
-      );
-      final all = [...pending, ...accepted];
-      // Sort: soonest scheduled date first, then created_at
-      all.sort((a, b) {
-        final da = a.scheduledDate ?? a.createdAt ?? '';
-        final db = b.scheduledDate ?? b.createdAt ?? '';
-        return da.compareTo(db);
-      });
+      final res = await _api.dio.get('/sessions/upcoming-cleans');
+      final items = (res.data as List)
+          .map((e) => UpcomingClean.fromJson(e as Map<String, dynamic>))
+          .toList();
       setState(() {
-        _sessions = all;
+        _cleans = items;
         _loading = false;
       });
     } catch (_) {
@@ -76,7 +58,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (confirm != true) return;
     try {
       await _api.dio.post('/sessions/$sessionId/accept');
-      _fetchSessions();
+      _fetchUpcoming();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +97,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           const SnackBar(content: Text('Backup request sent to manager')),
         );
       }
-      _fetchSessions();
+      _fetchUpcoming();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -133,10 +115,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       );
     }
 
-    if (_sessions.isEmpty) {
+    if (_cleans.isEmpty) {
       return RefreshIndicator(
         color: OceanTheme.primary,
-        onRefresh: _fetchSessions,
+        onRefresh: _fetchUpcoming,
         child: ListView(
           children: [
             SizedBox(
@@ -176,54 +158,49 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final weekEnd = today.add(const Duration(days: 7));
 
-    final todaySessions = <CleanSession>[];
-    final thisWeekSessions = <CleanSession>[];
-    final laterSessions = <CleanSession>[];
+    final todayCleans = <UpcomingClean>[];
+    final thisWeekCleans = <UpcomingClean>[];
+    final laterCleans = <UpcomingClean>[];
 
-    for (final s in _sessions) {
-      final dateStr = s.scheduledDate ?? s.createdAt;
-      if (dateStr == null) {
-        laterSessions.add(s);
-        continue;
-      }
-      final dt = DateTime.tryParse(dateStr);
+    for (final c in _cleans) {
+      final dt = DateTime.tryParse(c.checkoutDate);
       if (dt == null) {
-        laterSessions.add(s);
+        laterCleans.add(c);
         continue;
       }
       final date = DateTime(dt.year, dt.month, dt.day);
       if (date == today) {
-        todaySessions.add(s);
+        todayCleans.add(c);
       } else if (date.isAfter(today) && date.isBefore(weekEnd)) {
-        thisWeekSessions.add(s);
+        thisWeekCleans.add(c);
       } else {
-        laterSessions.add(s);
+        laterCleans.add(c);
       }
     }
 
     return RefreshIndicator(
       color: OceanTheme.primary,
-      onRefresh: _fetchSessions,
+      onRefresh: _fetchUpcoming,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (todaySessions.isNotEmpty) ...[
+          if (todayCleans.isNotEmpty) ...[
             _sectionHeader('Today'),
-            ...todaySessions.map((s) => _buildSessionCard(s, isToday: true)),
+            ...todayCleans.map((c) => _buildCleanCard(c, isToday: true)),
             const SizedBox(height: 16),
           ],
-          if (thisWeekSessions.isNotEmpty) ...[
+          if (thisWeekCleans.isNotEmpty) ...[
             _sectionHeader('This Week'),
-            ...thisWeekSessions.map((s) => _buildSessionCard(s)),
+            ...thisWeekCleans.map((c) => _buildCleanCard(c)),
             const SizedBox(height: 16),
           ],
-          if (laterSessions.isNotEmpty) ...[
+          if (laterCleans.isNotEmpty) ...[
             _sectionHeader(
-              todaySessions.isEmpty && thisWeekSessions.isEmpty
+              todayCleans.isEmpty && thisWeekCleans.isEmpty
                   ? 'Upcoming Cleans'
                   : 'Later',
             ),
-            ...laterSessions.map((s) => _buildSessionCard(s)),
+            ...laterCleans.map((c) => _buildCleanCard(c)),
           ],
         ],
       ),
@@ -244,13 +221,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildSessionCard(CleanSession session, {bool isToday = false}) {
-    final isPending = session.status == 'pending';
-    final isAccepted = session.status == 'accepted';
-    final sessionType = (session.sessionType ?? 'turnover').replaceAll(
-      '_',
-      ' ',
-    );
+  Widget _buildCleanCard(UpcomingClean clean, {bool isToday = false}) {
+    final hasSession = clean.sessionId != null;
+    final isPending = clean.sessionStatus == 'pending';
+    final isAccepted = clean.sessionStatus == 'accepted';
+    final nights = _nightsBetween(clean.checkinDate, clean.checkoutDate);
+    final guestLabel = clean.guestName ?? clean.summary ?? 'Guest';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -268,13 +244,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             onTap: isAccepted
                 ? () => Navigator.of(
                     context,
-                  ).pushNamed('/session', arguments: session.id)
+                  ).pushNamed('/session', arguments: clean.sessionId)
                 : null,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Property name + status badge
                   Row(
                     children: [
                       const Icon(
@@ -285,7 +262,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          session.propertyName ?? 'Property',
+                          clean.propertyName,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -293,66 +270,133 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: OceanTheme.statusColor(session.status),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          session.status.replaceAll('_', ' '),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                      if (hasSession)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: OceanTheme.statusColor(
+                              clean.sessionStatus ?? '',
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            (clean.sessionStatus ?? '').replaceAll('_', ' '),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF94A3B8),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'not assigned',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+                  // Guest name + nights
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.person_outline,
+                        size: 14,
+                        color: OceanTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        guestLabel,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: OceanTheme.text,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '$nights night${nights == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: OceanTheme.textSecondary,
+                        ),
+                      ),
+                      if (clean.numGuests != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '· ${clean.numGuests} guest${clean.numGuests == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: OceanTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Clean date (checkout) + stay dates
                   Row(
                     children: [
                       Icon(
-                        Icons.calendar_today,
+                        Icons.cleaning_services,
                         size: 14,
                         color: OceanTheme.primary.withValues(alpha: 0.7),
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _formatDate(
-                          session.scheduledDate ?? session.createdAt ?? '',
-                        ),
+                        'Clean: ${_formatDate(clean.checkoutDate)}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: OceanTheme.primary,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        sessionType[0].toUpperCase() + sessionType.substring(1),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: OceanTheme.textSecondary,
-                        ),
-                      ),
                     ],
                   ),
-                  if (session.notes != null && session.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Stay: ${_formatShort(clean.checkinDate)} → ${_formatShort(clean.checkoutDate)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: OceanTheme.textSecondary,
+                    ),
+                  ),
+                  // Assigned cleaner
+                  if (clean.cleanerName != null) ...[
                     const SizedBox(height: 6),
-                    Text(
-                      session.notes!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: OceanTheme.textSecondary,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.badge_outlined,
+                          size: 14,
+                          color: OceanTheme.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          clean.cleanerName!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: OceanTheme.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -360,7 +404,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
           // Action buttons for pending sessions
-          if (isPending)
+          if (isPending && clean.sessionId != null)
             Container(
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
@@ -369,7 +413,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: () => _acceptSession(session.id),
+                      onTap: () => _acceptSession(clean.sessionId!),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: const BoxDecoration(
@@ -392,7 +436,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ),
                   Expanded(
                     child: InkWell(
-                      onTap: () => _requestBackup(session.id),
+                      onTap: () => _requestBackup(clean.sessionId!),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         color: const Color(0xFFFEFCE8),
@@ -412,7 +456,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ),
             ),
           // Start button for accepted sessions
-          if (isAccepted)
+          if (isAccepted && clean.sessionId != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: SizedBox(
@@ -420,7 +464,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(
                     context,
-                  ).pushNamed('/session', arguments: session.id),
+                  ).pushNamed('/session', arguments: clean.sessionId),
                   child: const Text(
                     'Start Clean →',
                     style: TextStyle(fontWeight: FontWeight.w700),
@@ -431,6 +475,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         ],
       ),
     );
+  }
+
+  int _nightsBetween(String checkin, String checkout) {
+    try {
+      final a = DateTime.parse(checkin);
+      final b = DateTime.parse(checkout);
+      return b.difference(a).inDays;
+    } catch (_) {
+      return 0;
+    }
   }
 
   String _formatDate(String iso) {
@@ -461,6 +515,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         'Dec',
       ];
       return '${weekdays[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _formatShort(String iso) {
+    try {
+      final dt = DateTime.parse(iso);
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${months[dt.month - 1]} ${dt.day}';
     } catch (_) {
       return '';
     }

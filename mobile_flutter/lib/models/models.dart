@@ -146,3 +146,51 @@ class Photo {
     storagePath: (json['storagePath'] ?? json['storage_path'] ?? '') as String,
   );
 }
+
+class UpcomingClean {
+  final String reservationId;
+  final String propertyId;
+  final String propertyName;
+  final String checkinDate;
+  final String checkoutDate;
+  final String? guestName;
+  final String? summary;
+  final int? numGuests;
+  final String? sessionId;
+  final String? sessionStatus;
+  final String? cleanerId;
+  final String? cleanerName;
+  final String? sessionType;
+
+  UpcomingClean({
+    required this.reservationId,
+    required this.propertyId,
+    required this.propertyName,
+    required this.checkinDate,
+    required this.checkoutDate,
+    this.guestName,
+    this.summary,
+    this.numGuests,
+    this.sessionId,
+    this.sessionStatus,
+    this.cleanerId,
+    this.cleanerName,
+    this.sessionType,
+  });
+
+  factory UpcomingClean.fromJson(Map<String, dynamic> json) => UpcomingClean(
+    reservationId: (json['reservation_id'] ?? '') as String,
+    propertyId: (json['property_id'] ?? '') as String,
+    propertyName: (json['property_name'] ?? '') as String,
+    checkinDate: (json['checkin_date'] ?? '') as String,
+    checkoutDate: (json['checkout_date'] ?? '') as String,
+    guestName: json['guest_name'] as String?,
+    summary: json['summary'] as String?,
+    numGuests: json['num_guests'] as int?,
+    sessionId: json['session_id'] as String?,
+    sessionStatus: json['session_status'] as String?,
+    cleanerId: json['cleaner_id'] as String?,
+    cleanerName: json['cleaner_name'] as String?,
+    sessionType: json['session_type'] as String?,
+  );
+}
