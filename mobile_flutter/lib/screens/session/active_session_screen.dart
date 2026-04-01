@@ -50,13 +50,18 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
       final list = (response.data as List)
           .map((e) => RoomClean.fromJson(e as Map<String, dynamic>))
           .toList();
-      // Also fetch property_id
+      // Also fetch property_id and check session status
       final sessionRes = await _api.dio.get('/sessions/${widget.sessionId}');
-      _propertyId =
-          (sessionRes.data as Map<String, dynamic>)['property_id'] as String?;
+      final sessionData = sessionRes.data as Map<String, dynamic>;
+      _propertyId = sessionData['property_id'] as String?;
+      final status = sessionData['status'] as String?;
       setState(() {
         _rooms = list;
         _loadingRooms = false;
+        // Auto-resume if session is already in progress
+        if (status == 'in_progress') {
+          _started = true;
+        }
       });
     } catch (_) {
       setState(() => _loadingRooms = false);

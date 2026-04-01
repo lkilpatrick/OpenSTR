@@ -198,6 +198,64 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response): Promise<void>
   res.json(result.rows[0]);
 });
 
+// POST /sessions/claim — cleaner claims an unassigned clean (creates session + accepts it)
+router.post('/claim', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { property_id, reservation_id, scheduled_date } = req.body;
+  if (!property_id || !reservation_id) {
+    res.status(400).json({ error: 'property_id and reservation_id required' });
+    return;
+  }
+
+  const cleanerId = req.user!.userId;
+
+  // Verify cleaner is assigned to this property
+  const access = await pool.query(
+    `SELECT 1 FROM property_cleaners WHERE property_id = $1 AND user_id = $2 AND is_active = true`,
+    [property_id, cleanerId]
+  );
+  if (!access.rows[0] && req.user!.role === 'cleaner') {
+    res.status(403).json({ error: 'Not assigned to this property' });
+    return;
+  }
+
+  // Check no session already exists for this reservation
+  const existing = await pool.query(
+    `SELECT id FROM clean_sessions WHERE reservation_id = $1`,
+    [reservation_id]
+  );
+  if (existing.rows[0]) {
+    res.status(409).json({ error: 'A session already exists for this reservation' });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const sessionResult = await client.query(
+      `INSERT INTO clean_sessions (property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date, status, accepted_at)
+       VALUES ($1, $2, 'turnover', 'cleaner_claim', $3, $4, 'accepted', now()) RETURNING *`,
+      [property_id, cleanerId, reservation_id, scheduled_date ?? null]
+    );
+    const session = sessionResult.rows[0];
+
+    // Auto-create room_cleans for each room in the property
+    await client.query(
+      `INSERT INTO room_cleans (session_id, room_id)
+       SELECT $1, id FROM rooms WHERE property_id = $2 AND archived = false`,
+      [session.id, property_id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(session);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 // POST /sessions — create session (owner/admin)
 router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
   const { property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date } = req.body;
