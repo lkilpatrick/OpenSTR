@@ -246,4 +246,61 @@ router.get('/:sessionId/rooms', async (req: AuthRequest, res: Response): Promise
   res.json(rooms.rows);
 });
 
+// GET /sessions/:sessionId/notes — cleaner notes for a session
+router.get('/:sessionId/notes', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(
+    `SELECT cn.*, u.name as author_name
+     FROM cleaner_notes cn
+     JOIN users u ON u.id = cn.user_id
+     WHERE cn.session_id = $1
+     ORDER BY cn.created_at DESC`,
+    [req.params.sessionId]
+  );
+  res.json(result.rows);
+});
+
+// POST /sessions/:sessionId/notes — add a cleaner note
+router.post('/:sessionId/notes', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { note } = req.body as { note?: string };
+  if (!note?.trim()) { res.status(400).json({ error: 'note is required' }); return; }
+  const result = await pool.query(
+    `INSERT INTO cleaner_notes (session_id, user_id, note) VALUES ($1, $2, $3) RETURNING *`,
+    [req.params.sessionId, req.user!.userId, note.trim()]
+  );
+  res.status(201).json(result.rows[0]);
+});
+
+// DELETE /sessions/notes/:noteId — delete a cleaner note
+router.delete('/notes/:noteId', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(`DELETE FROM cleaner_notes WHERE id = $1 RETURNING id`, [req.params.noteId]);
+  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  res.json({ message: 'Note deleted' });
+});
+
+// GET /sessions/notes/recent — recent cleaner notes across all sessions for a property
+router.get('/notes/recent', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { property_id, limit } = req.query;
+  const maxNotes = Math.min(parseInt(limit as string) || 10, 50);
+  const conditions: string[] = [];
+  const values: unknown[] = [maxNotes];
+  if (property_id) {
+    conditions.push('cs.property_id = $2');
+    values.push(property_id);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const result = await pool.query(
+    `SELECT cn.*, u.name as author_name, cs.property_id,
+            r.checkin_date, r.checkout_date, r.guest_name, r.summary as reservation_summary
+     FROM cleaner_notes cn
+     JOIN users u ON u.id = cn.user_id
+     JOIN clean_sessions cs ON cs.id = cn.session_id
+     LEFT JOIN reservations r ON r.id = cs.reservation_id
+     ${where}
+     ORDER BY cn.created_at DESC
+     LIMIT $1`,
+    values
+  );
+  res.json(result.rows);
+});
+
 export default router;

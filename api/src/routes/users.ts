@@ -67,9 +67,9 @@ router.get('/:userId', requireRole('owner', 'admin'), async (req: AuthRequest, r
   res.json(result.rows[0]);
 });
 
-// PATCH /users/:userId (update name, active, push_token)
+// PATCH /users/:userId (update name, email, password, active, push_token, role, cleaning_rate)
 router.patch('/:userId', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
-  const fields = ['name', 'active', 'push_token', 'role'];
+  const fields = ['name', 'email', 'active', 'push_token', 'role', 'cleaning_rate'];
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
@@ -79,14 +79,28 @@ router.patch('/:userId', requireRole('owner', 'admin'), async (req: AuthRequest,
       values.push(req.body[f]);
     }
   }
-  if (updates.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
-  updates.push('updated_at = now()');
-  values.push(req.params.userId);
+  if (updates.length === 0 && !req.body.password) { res.status(400).json({ error: 'No fields to update' }); return; }
+  if (updates.length > 0) {
+    updates.push('updated_at = now()');
+    values.push(req.params.userId);
+    const result = await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, email, name, role, active, cleaning_rate`,
+      values
+    );
+    if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  }
+  // Update password if provided
+  if (req.body.password) {
+    const passwordHash = await bcrypt.hash(req.body.password, 12);
+    await pool.query(
+      `UPDATE account SET password = $1, updated_at = now() WHERE user_id = $2 AND provider_id = 'credential'`,
+      [passwordHash, req.params.userId]
+    );
+  }
   const result = await pool.query(
-    `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, email, name, role, active`,
-    values
+    'SELECT id, email, name, role, active, cleaning_rate FROM users WHERE id = $1',
+    [req.params.userId]
   );
-  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
   res.json(result.rows[0]);
 });
 

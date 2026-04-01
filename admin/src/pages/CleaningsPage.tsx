@@ -40,7 +40,7 @@ interface TaskCompletion {
 
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
 
-export default function SessionsPage() {
+export default function CleaningsPage() {
   const { propertyId } = useSelectedProperty();
   const [selected, setSelected] = useState<Session | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -131,7 +131,7 @@ export default function SessionsPage() {
     <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 1fr' : '1fr', gap: 24 }}>
       {/* Session list */}
       <div>
-        <h1 style={{ margin: '0 0 16px', fontSize: 22 }}>Session Review</h1>
+        <h1 style={{ margin: '0 0 16px', fontSize: 22 }}>Cleanings</h1>
 
         {/* Filter bar */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
