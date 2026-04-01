@@ -163,17 +163,27 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response): Promise<void>
 
 // POST /sessions — create session (owner/admin)
 router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
-  const { property_id, cleaner_id, session_type, triggered_by, reservation_id } = req.body;
+  const { property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date } = req.body;
   if (!property_id) { res.status(400).json({ error: 'property_id required' }); return; }
+
+  // Auto-assign default (primary) cleaner if none specified
+  let assignedCleanerId = cleaner_id ?? null;
+  if (!assignedCleanerId) {
+    const primary = await pool.query(
+      `SELECT user_id FROM property_cleaners WHERE property_id = $1 AND is_active = true ORDER BY is_primary DESC, priority ASC LIMIT 1`,
+      [property_id]
+    );
+    if (primary.rows[0]) assignedCleanerId = primary.rows[0].user_id;
+  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const sessionResult = await client.query(
-      `INSERT INTO clean_sessions (property_id, cleaner_id, session_type, triggered_by, reservation_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [property_id, cleaner_id ?? null, session_type ?? 'turnover', triggered_by ?? 'manual', reservation_id ?? null]
+      `INSERT INTO clean_sessions (property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [property_id, assignedCleanerId, session_type ?? 'turnover', triggered_by ?? 'manual', reservation_id ?? null, scheduled_date ?? null]
     );
     const session = sessionResult.rows[0];
 
