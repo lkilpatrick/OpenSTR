@@ -9,7 +9,7 @@ router.use(requireAuth);
 // GET /users — list all users (owner/admin only)
 router.get('/', requireRole('owner', 'admin'), async (_req, res: Response): Promise<void> => {
   const result = await pool.query(
-    `SELECT id, email, name, role, active, push_token, created_at FROM users ORDER BY name`
+    `SELECT id, email, name, role, active, push_token, cleaning_rate, created_at FROM users ORDER BY name`
   );
   res.json(result.rows);
 });
@@ -37,10 +37,11 @@ router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Re
   const userId = crypto.randomUUID();
 
   // Create user row
+  const { cleaning_rate } = req.body as { cleaning_rate?: number };
   await pool.query(
-    `INSERT INTO users (id, email, name, role, active, email_verified, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, true, false, now(), now())`,
-    [userId, email, name, userRole]
+    `INSERT INTO users (id, email, name, role, active, email_verified, cleaning_rate, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, true, false, $5, now(), now())`,
+    [userId, email, name, userRole, cleaning_rate ?? null]
   );
 
   // Create better-auth account row (credential provider)
@@ -51,7 +52,7 @@ router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Re
   );
 
   const result = await pool.query(
-    'SELECT id, email, name, role, active, created_at FROM users WHERE id = $1',
+    'SELECT id, email, name, role, active, cleaning_rate, created_at FROM users WHERE id = $1',
     [userId]
   );
   res.status(201).json(result.rows[0]);

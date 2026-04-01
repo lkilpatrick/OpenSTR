@@ -44,6 +44,13 @@ interface CleanerNote {
   checkout_date?: string;
 }
 
+interface Cleaner {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 interface SpanBar {
   reservation: Reservation;
   row: number;
@@ -78,6 +85,7 @@ export default function DashboardPage() {
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
   const [resForm, setResForm] = useState({ checkin_date: '', checkout_date: '', guest_name: '', phone: '', num_guests: '', is_blocked: false });
+  const [assigningCleaner, setAssigningCleaner] = useState<string>('');
   const queryClient = useQueryClient();
 
   const now = new Date();
@@ -102,6 +110,21 @@ export default function DashboardPage() {
     queryKey: ['cleaner-notes-recent', propertyId],
     queryFn: async () => { const { data } = await api.get<CleanerNote[]>(`/sessions/notes/recent?property_id=${propertyId}&limit=10`); return data; },
     enabled: !!propertyId,
+  });
+
+  const { data: cleaners } = useQuery<Cleaner[]>({
+    queryKey: ['users'],
+    queryFn: async () => { const { data } = await api.get<Cleaner[]>('/users'); return data; },
+  });
+
+  const cleanerList = useMemo(() => (cleaners ?? []).filter(c => c.role === 'cleaner'), [cleaners]);
+
+  const createSessionMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.post('/sessions', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      setAssigningCleaner('');
+    },
   });
 
   const syncMutation = useMutation({
@@ -201,6 +224,15 @@ export default function DashboardPage() {
     return map;
   }, [sessions]);
 
+  // Cleaning days: checkout dates of non-blocked reservations
+  const cleaningDays = useMemo(() => {
+    const days = new Set<string>();
+    for (const r of (reservations ?? [])) {
+      if (!r.is_blocked) days.add(r.checkout_date.slice(0, 10));
+    }
+    return days;
+  }, [reservations]);
+
   // Reservation sections
   const nonBlocked = useMemo(() => (reservations ?? []).filter(r => !r.is_blocked), [reservations]);
 
@@ -276,9 +308,13 @@ export default function DashboardPage() {
                   const day = parseInt(dateStr.slice(8));
                   const isToday = dateStr === todayStr;
                   const daySessions = sessionsByDate[dateStr];
+                  const isCleaningDay = cleaningDays.has(dateStr);
                   return (
                     <div key={dateStr} style={{ padding: '4px 6px', minHeight: 28, borderBottom: '1px solid #f8fafc' }}>
-                      <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? '#fff' : '#374151', background: isToday ? '#3b82f6' : 'transparent', borderRadius: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{day}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? '#fff' : '#374151', background: isToday ? '#3b82f6' : 'transparent', borderRadius: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{day}</div>
+                        {isCleaningDay && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} title="Cleaning day" />}
+                      </div>
                       {daySessions?.map(s => <div key={s.id} style={{ fontSize: 8, marginTop: 1, padding: '1px 3px', borderRadius: 2, background: sColor(s.status), color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.cleaner_name ?? 'Clean'}</div>)}
                     </div>
                   );
@@ -318,6 +354,7 @@ export default function DashboardPage() {
           <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#d1fae5', border: '1px solid #6ee7b7', marginRight: 4, verticalAlign: 'middle' }} />Guest stay</span>
           <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#fee2e2', border: '1px solid #fca5a5', marginRight: 4, verticalAlign: 'middle' }} />Blocked</span>
           <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#3b82f6', marginRight: 4, verticalAlign: 'middle' }} />Cleaning</span>
+          <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#ef4444', marginRight: 4, verticalAlign: 'middle' }} />Cleaning day</span>
         </div>
       </div>
 
@@ -469,7 +506,13 @@ export default function DashboardPage() {
             {selectedRes.description && (
               <div style={{ marginBottom: 16 }}>
                 <div style={detailLabel}>Description</div>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#374151' }}>{selectedRes.description}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap' }}>
+                  {selectedRes.description.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+                    /^https?:\/\//.test(part)
+                      ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'underline' }}>{part}</a>
+                      : part
+                  )}
+                </p>
               </div>
             )}
 
@@ -495,6 +538,24 @@ export default function DashboardPage() {
                 </div>
               );
             })()}
+
+            {/* Assign cleaner */}
+            {!selectedRes.is_blocked && !findSessionForRes(selectedRes.id) && (
+              <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: '#374151' }}>Create Cleaning Session</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select value={assigningCleaner} onChange={e => setAssigningCleaner(e.target.value)} style={{ ...inpSt, marginBottom: 0, flex: 1 }}>
+                    <option value="">Auto-assign default cleaner</option>
+                    {cleanerList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button onClick={() => createSessionMutation.mutate({ property_id: propertyId, reservation_id: selectedRes.id, cleaner_id: assigningCleaner || undefined, scheduled_date: selectedRes.checkout_date.slice(0, 10) })}
+                    disabled={createSessionMutation.isPending}
+                    style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>
+                    {createSessionMutation.isPending ? 'Creating...' : 'Assign Clean'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => { setEditingRes(selectedRes); setResForm({ checkin_date: selectedRes.checkin_date.slice(0,10), checkout_date: selectedRes.checkout_date.slice(0,10), guest_name: selectedRes.guest_name ?? '', phone: selectedRes.phone ?? '', num_guests: selectedRes.num_guests?.toString() ?? '', is_blocked: selectedRes.is_blocked }); }}
