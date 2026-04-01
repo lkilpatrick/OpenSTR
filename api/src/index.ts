@@ -43,6 +43,10 @@ app.all('/api/auth/*', toNodeHandler(auth));
 app.use(express.json());
 app.use(cookieParser());
 
+// Serve uploaded photos as static files
+const PHOTO_DIR = process.env.PHOTO_STORAGE_PATH ?? '/photos';
+app.use('/photos', express.static(PHOTO_DIR));
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
