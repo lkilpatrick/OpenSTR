@@ -81,4 +81,14 @@ router.post('/:roomCleanId/tasks/:taskId/complete', async (req: AuthRequest, res
   res.status(201).json(result.rows[0]);
 });
 
+// DELETE /photos/file/:photoId — delete a single photo
+router.delete('/file/:photoId', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(`DELETE FROM photos WHERE id = $1 RETURNING id, storage_path`, [req.params.photoId]);
+  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  // Attempt to remove the file from disk
+  const filePath = path.join(PHOTO_DIR, path.basename(result.rows[0].storage_path));
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* ignore */ }
+  res.json({ message: 'Photo deleted' });
+});
+
 export default router;

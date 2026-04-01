@@ -124,7 +124,7 @@ async function main() {
   await pool.query(`
     INSERT INTO properties (id, name, type, address, standard_id, active) VALUES
       ($1, 'My STR Property', 'short_term_rental', '123 Example Street, Your City, CA', $3, true),
-      ($2, 'Upstairs', 'private_home', '456 Hilltop Lane, Your City, CA', $4, true)
+      ($2, 'Upstairs', 'private_home', '123 Example Street, Your City, CA', $4, true)
   `, [PROP.OCEAN_VIEW, PROP.UPSTAIRS, STD.AIRBNB, STD.HOME]);
   console.log('✅ Properties seeded');
 

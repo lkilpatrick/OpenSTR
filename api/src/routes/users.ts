@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { pool } from '../db/pool';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 
@@ -11,6 +12,49 @@ router.get('/', requireRole('owner', 'admin'), async (_req, res: Response): Prom
     `SELECT id, email, name, role, active, push_token, created_at FROM users ORDER BY name`
   );
   res.json(result.rows);
+});
+
+// POST /users — create a new user (owner/admin only)
+router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const { email, name, password, role } = req.body as {
+    email?: string; name?: string; password?: string; role?: string;
+  };
+  if (!email || !name || !password) {
+    res.status(400).json({ error: 'email, name, and password are required' });
+    return;
+  }
+  const validRoles = ['guest', 'cleaner', 'admin', 'owner'];
+  const userRole = validRoles.includes(role ?? '') ? role! : 'cleaner';
+
+  // Check for duplicate email
+  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+  if (existing.rows.length > 0) {
+    res.status(409).json({ error: 'A user with this email already exists' });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const userId = crypto.randomUUID();
+
+  // Create user row
+  await pool.query(
+    `INSERT INTO users (id, email, name, role, active, email_verified, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, true, false, now(), now())`,
+    [userId, email, name, userRole]
+  );
+
+  // Create better-auth account row (credential provider)
+  await pool.query(
+    `INSERT INTO account (id, user_id, account_id, provider_id, password, created_at, updated_at)
+     VALUES ($1, $2, $3, 'credential', $4, now(), now())`,
+    [crypto.randomUUID(), userId, userId, passwordHash]
+  );
+
+  const result = await pool.query(
+    'SELECT id, email, name, role, active, created_at FROM users WHERE id = $1',
+    [userId]
+  );
+  res.status(201).json(result.rows[0]);
 });
 
 // GET /users/:userId

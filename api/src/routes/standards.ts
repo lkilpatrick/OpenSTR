@@ -100,6 +100,26 @@ router.delete('/:id/tasks/:taskId', requireRole('owner'), async (req: AuthReques
   res.json({ message: 'Archived' });
 });
 
+// DELETE /standards/:id — delete a standard and its tasks
+router.delete('/:id', requireRole('owner'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Unlink properties using this standard
+    await client.query(`UPDATE properties SET standard_id = NULL WHERE standard_id = $1`, [req.params.id]);
+    await client.query(`DELETE FROM standard_tasks WHERE standard_id = $1`, [req.params.id]);
+    const result = await client.query(`DELETE FROM standards WHERE id = $1 RETURNING id`, [req.params.id]);
+    await client.query('COMMIT');
+    if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+    res.json({ message: 'Standard deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 // GET /standards/:id/propagate/preview — dry-run propagation
 router.get('/:id/propagate/preview', requireRole('owner'), async (req: AuthRequest, res: Response): Promise<void> => {
   const standardId = req.params.id;

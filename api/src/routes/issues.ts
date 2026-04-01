@@ -29,16 +29,42 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   res.status(201).json(result.rows[0]);
 });
 
-// PATCH /issues/:id
+// PATCH /issues/:id — update issue fields
 router.patch('/:id', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
-  const { status, resolved_at } = req.body as { status?: string; resolved_at?: string };
+  const fields = ['title', 'description', 'severity', 'status'];
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+  for (const f of fields) {
+    if (req.body[f] !== undefined) {
+      updates.push(`${f} = $${idx++}`);
+      values.push(req.body[f]);
+    }
+  }
+  // Auto-set resolved_at when status changes to resolved
+  if (req.body.status === 'resolved') {
+    updates.push(`resolved_at = $${idx++}`);
+    values.push(new Date().toISOString());
+  } else if (req.body.resolved_at !== undefined) {
+    updates.push(`resolved_at = $${idx++}`);
+    values.push(req.body.resolved_at);
+  }
+  if (updates.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
+  updates.push('updated_at = now()');
+  values.push(req.params.id);
   const result = await pool.query(
-    `UPDATE issues SET status = COALESCE($1, status), resolved_at = COALESCE($2, resolved_at), updated_at = now()
-     WHERE id = $3 RETURNING *`,
-    [status ?? null, resolved_at ?? (status === 'resolved' ? new Date().toISOString() : null), req.params.id]
+    `UPDATE issues SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+    values
   );
   if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
   res.json(result.rows[0]);
+});
+
+// DELETE /issues/:id
+router.delete('/:id', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(`DELETE FROM issues WHERE id = $1 RETURNING id`, [req.params.id]);
+  if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+  res.json({ message: 'Issue deleted' });
 });
 
 export default router;
