@@ -103,6 +103,16 @@ router.patch('/reservations/:propertyId/:reservationId', async (req: AuthRequest
   res.json(result.rows[0]);
 });
 
+// DELETE /ical/reservations/:propertyId/all — delete ALL reservations for a property (clear data)
+// NOTE: Must be registered BEFORE /:reservationId to avoid Express matching "all" as a reservationId
+router.delete('/reservations/:propertyId/all', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await pool.query(
+    `DELETE FROM reservations WHERE property_id = $1 RETURNING id`,
+    [req.params.propertyId]
+  );
+  res.json({ message: `Deleted ${result.rowCount} reservations` });
+});
+
 // DELETE /ical/reservations/:propertyId/:reservationId — delete a reservation
 router.delete('/reservations/:propertyId/:reservationId', async (req: AuthRequest, res: Response): Promise<void> => {
   const result = await pool.query(
@@ -111,15 +121,6 @@ router.delete('/reservations/:propertyId/:reservationId', async (req: AuthReques
   );
   if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
   res.json({ message: 'Reservation deleted' });
-});
-
-// DELETE /ical/reservations/:propertyId — delete ALL reservations for a property (clear data)
-router.delete('/reservations/:propertyId/all', async (req: AuthRequest, res: Response): Promise<void> => {
-  const result = await pool.query(
-    `DELETE FROM reservations WHERE property_id = $1 RETURNING id`,
-    [req.params.propertyId]
-  );
-  res.json({ message: `Deleted ${result.rowCount} reservations` });
 });
 
 export { syncPropertyIcal };

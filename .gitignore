@@ -35,11 +35,9 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
-# Expo / React Native
+# Expo / React Native (old TS mobile app - removed)
+mobile/
 .expo/
-mobile/.expo/
-mobile/dist/
-mobile/web-build/
 *.jks
 *.p8
 *.p12

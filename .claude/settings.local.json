@@ -10,7 +10,8 @@
       "Bash(npx expo:*)",
       "Bash(npx react-native:*)",
       "Bash(npm list:*)",
-      "Bash(gh issue:*)"
+      "Bash(gh issue:*)",
+      "Bash(curl -s http://localhost:8083/)"
     ]
   }
 }
