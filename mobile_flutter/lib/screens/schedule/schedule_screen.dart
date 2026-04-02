@@ -291,9 +291,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           InkWell(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             onTap: canOpen
-                ? () => Navigator.of(
-                    context,
-                  ).pushNamed('/session', arguments: clean.sessionId)
+                ? () async {
+                    await Navigator.of(
+                      context,
+                    ).pushNamed('/session', arguments: clean.sessionId);
+                    _fetchUpcoming();
+                  }
                 : null,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -511,9 +514,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).pushNamed('/session', arguments: clean.sessionId),
+                  onPressed: () async {
+                    await Navigator.of(
+                      context,
+                    ).pushNamed('/session', arguments: clean.sessionId);
+                    _fetchUpcoming();
+                  },
                   child: const Text(
                     'Start Clean →',
                     style: TextStyle(fontWeight: FontWeight.w700),
@@ -528,9 +534,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).pushNamed('/session', arguments: clean.sessionId),
+                  onPressed: () async {
+                    await Navigator.of(
+                      context,
+                    ).pushNamed('/session', arguments: clean.sessionId);
+                    _fetchUpcoming();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF16A34A),
                     foregroundColor: Colors.white,

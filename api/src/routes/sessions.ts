@@ -184,6 +184,84 @@ router.post('/:sessionId/request-backup', async (req: AuthRequest, res: Response
   res.json({ message: 'Backup request submitted' });
 });
 
+// GET /sessions/:sessionId/detail — full session breakdown with rooms, tasks, photos, notes, rating
+// NOTE: Must be registered BEFORE /:sessionId to avoid Express matching "detail" as a sessionId
+router.get('/:sessionId/detail', async (req: AuthRequest, res: Response): Promise<void> => {
+  const session = await pool.query(
+    `SELECT s.*, u.name as cleaner_name, p.name as property_name
+     FROM clean_sessions s
+     LEFT JOIN users u ON u.id = s.cleaner_id
+     LEFT JOIN properties p ON p.id = s.property_id
+     WHERE s.id = $1`,
+    [req.params.sessionId]
+  );
+  if (!session.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
+
+  const roomCleans = await pool.query(
+    `SELECT rc.*, r.display_name, r.slug, r.theme_name, r.display_order
+     FROM room_cleans rc
+     JOIN rooms r ON r.id = rc.room_id
+     WHERE rc.session_id = $1
+     ORDER BY r.display_order`,
+    [req.params.sessionId]
+  );
+
+  const roomCleanIds = roomCleans.rows.map((r: { id: string }) => r.id);
+
+  let photos: { rows: Array<Record<string, unknown>> } = { rows: [] };
+  let taskCompletions: { rows: Array<Record<string, unknown>> } = { rows: [] };
+  if (roomCleanIds.length > 0) {
+    const placeholders = roomCleanIds.map((_: string, i: number) => `$${i + 1}`).join(',');
+
+    photos = await pool.query(
+      `SELECT p.* FROM photos p WHERE p.room_clean_id IN (${placeholders}) ORDER BY p.uploaded_at`,
+      roomCleanIds
+    );
+
+    taskCompletions = await pool.query(
+      `SELECT tc.*, t.label, t.task_type, t.required as is_required, t.category, t.is_high_touch, t.display_order as task_order
+       FROM task_completions tc
+       JOIN tasks t ON t.id = tc.task_id
+       WHERE tc.room_clean_id IN (${placeholders})
+       ORDER BY t.display_order`,
+      roomCleanIds
+    );
+  }
+
+  const notes = await pool.query(
+    `SELECT cn.*, u.name as author_name
+     FROM cleaner_notes cn
+     JOIN users u ON u.id = cn.user_id
+     WHERE cn.session_id = $1
+     ORDER BY cn.created_at ASC`,
+    [req.params.sessionId]
+  );
+
+  const rating = await pool.query(
+    `SELECT * FROM guest_ratings WHERE session_id = $1`,
+    [req.params.sessionId]
+  );
+
+  // Group photos and tasks by room_clean_id
+  const photosByRoom: Record<string, unknown[]> = {};
+  for (const p of photos.rows) { const rid = p.room_clean_id as string; (photosByRoom[rid] ??= []).push(p); }
+  const tasksByRoom: Record<string, unknown[]> = {};
+  for (const t of taskCompletions.rows) { const rid = t.room_clean_id as string; (tasksByRoom[rid] ??= []).push(t); }
+
+  const rooms = roomCleans.rows.map((rc: Record<string, unknown>) => ({
+    ...rc,
+    photos: photosByRoom[rc.id as string] ?? [],
+    tasks: tasksByRoom[rc.id as string] ?? [],
+  }));
+
+  res.json({
+    ...session.rows[0],
+    rooms,
+    notes: notes.rows,
+    rating: rating.rows[0] ?? null,
+  });
+});
+
 // GET /sessions/:sessionId
 router.get('/:sessionId', async (req: AuthRequest, res: Response): Promise<void> => {
   const result = await pool.query(
