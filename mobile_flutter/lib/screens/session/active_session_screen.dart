@@ -186,6 +186,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
   }
 
   void _handleFinishRoom() {
+    // Mark current room visually done, but allow revisiting
     if (_currentRoomIdx < _rooms.length - 1) {
       setState(() {
         _currentRoomIdx++;
@@ -193,27 +194,42 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
         _tasks = [];
       });
     } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('All Rooms Complete'),
-          content: const Text('Submit this session for review?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _submitSession();
-              },
-              child: const Text('Submit'),
-            ),
-          ],
-        ),
-      );
+      _promptSubmit();
     }
+  }
+
+  void _promptSubmit() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('All Rooms Complete'),
+        content: const Text('Submit this session for review?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _submitSession();
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToRoom(int index) {
+    if (index < 0 || index >= _rooms.length) return;
+    setState(() {
+      _currentRoomIdx = index;
+      _roomStep = RoomStep.beforePhoto;
+      _tasks = [];
+    });
+    // Pre-fetch tasks for the room
+    _fetchTasks(_rooms[index].roomId);
   }
 
   Future<void> _startSession() async {
@@ -329,51 +345,62 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
             final room = entry.value;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: OceanTheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${idx + 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
+              child: InkWell(
+                onTap: () async {
+                  await _startSession();
+                  if (_started) _goToRoom(idx);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: OceanTheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${idx + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            room.displayName,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (room.themeName != null)
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              room.themeName!,
+                              room.displayName,
                               style: const TextStyle(
-                                fontSize: 12,
-                                color: OceanTheme.textSecondary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                        ],
+                            if (room.themeName != null)
+                              Text(
+                                room.themeName!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: OceanTheme.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const Icon(
+                        Icons.chevron_right,
+                        color: OceanTheme.textSecondary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -416,96 +443,302 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     );
   }
 
-  // --- Active session: room-by-room flow ---
+  // --- Active session: room-by-room flow with free navigation ---
   Widget _buildActiveSession(RoomClean room) {
     final roomNum = _currentRoomIdx + 1;
     final totalRooms = _rooms.length;
     final photos = _roomPhotos[room.id] ?? [];
 
     return Scaffold(
-      appBar: AppBar(title: Text('Room $roomNum of $totalRooms')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: roomNum / totalRooms,
-              backgroundColor: OceanTheme.accent,
-              color: OceanTheme.primary,
-              minHeight: 8,
+      appBar: AppBar(
+        title: Text('Room $roomNum of $totalRooms'),
+        actions: [
+          // Submit button always accessible
+          TextButton(
+            onPressed: _promptSubmit,
+            child: const Text(
+              'Submit',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Room header
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
+        ],
+      ),
+      body: Column(
+        children: [
+          // Room selector strip
+          _buildRoomStrip(),
+          // Main content
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
               children: [
+                // Room header
                 Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    color: OceanTheme.accent,
-                    shape: BoxShape.circle,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '$roomNum',
-                    style: const TextStyle(
-                      color: OceanTheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        room.displayName,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: OceanTheme.text,
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: OceanTheme.accent,
+                          shape: BoxShape.circle,
                         ),
-                      ),
-                      if (room.themeName != null)
-                        Text(
-                          room.themeName!,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$roomNum',
                           style: const TextStyle(
-                            fontSize: 13,
-                            color: OceanTheme.textSecondary,
+                            color: OceanTheme.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              room.displayName,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: OceanTheme.text,
+                              ),
+                            ),
+                            if (room.themeName != null)
+                              Text(
+                                room.themeName!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: OceanTheme.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // Step indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: OceanTheme.accent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _stepLabel(_roomStep),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: OceanTheme.primary,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Step navigation row
+                _buildStepNav(room),
+                const SizedBox(height: 16),
+
+                // Step content
+                if (_roomStep == RoomStep.beforePhoto) _buildBeforePhotoStep(),
+                if (_roomStep == RoomStep.tasks) _buildTasksStep(room),
+                if (_roomStep == RoomStep.afterPhoto) _buildAfterPhotoStep(),
+                if (_roomStep == RoomStep.issuePhoto)
+                  _buildIssuePhotoStep(room, photos),
+
+                // Photo summary
+                if (photos.isNotEmpty && _roomStep != RoomStep.issuePhoto) ...[
+                  const SizedBox(height: 16),
+                  _buildPhotoSummary(photos),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          // Bottom navigation row
+          _buildBottomNav(),
+        ],
+      ),
+    );
+  }
 
-          // Step content
-          if (_roomStep == RoomStep.beforePhoto) _buildBeforePhotoStep(),
-          if (_roomStep == RoomStep.tasks) _buildTasksStep(room),
-          if (_roomStep == RoomStep.afterPhoto) _buildAfterPhotoStep(),
-          if (_roomStep == RoomStep.issuePhoto)
-            _buildIssuePhotoStep(room, photos),
+  String _stepLabel(RoomStep step) {
+    switch (step) {
+      case RoomStep.beforePhoto:
+        return 'Before Photo';
+      case RoomStep.tasks:
+        return 'Checklist';
+      case RoomStep.afterPhoto:
+        return 'After Photo';
+      case RoomStep.issuePhoto:
+        return 'Issues';
+    }
+  }
 
-          // Photo summary
-          if (photos.isNotEmpty && _roomStep != RoomStep.issuePhoto) ...[
-            const SizedBox(height: 16),
-            _buildPhotoSummary(photos),
-          ],
+  Widget _buildRoomStrip() {
+    return Container(
+      height: 52,
+      color: Colors.white,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        itemCount: _rooms.length,
+        itemBuilder: (context, index) {
+          final isSelected = index == _currentRoomIdx;
+          final room = _rooms[index];
+          final hasPhotos = (_roomPhotos[room.id]?.isNotEmpty ?? false);
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: InkWell(
+              onTap: () => _goToRoom(index),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: isSelected ? OceanTheme.primary : OceanTheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: hasPhotos && !isSelected
+                      ? Border.all(color: OceanTheme.success, width: 2)
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  room.displayName,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : OceanTheme.text,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStepNav(RoomClean room) {
+    final steps = RoomStep.values;
+    return Row(
+      children: steps.map((step) {
+        final isActive = step == _roomStep;
+        final idx = steps.indexOf(step);
+        return Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _roomStep = step);
+              if (step == RoomStep.tasks) _fetchTasks(room.roomId);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: isActive ? OceanTheme.primary : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                ['📷 Before', '✓ Tasks', '📷 After', '⚠ Issues'][idx],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive
+                      ? OceanTheme.primary
+                      : OceanTheme.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Previous room
+          if (_currentRoomIdx > 0)
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _goToRoom(_currentRoomIdx - 1),
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: Text(
+                  _rooms[_currentRoomIdx - 1].displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+          const SizedBox(width: 10),
+          // Next room / Finish
+          if (_currentRoomIdx < _rooms.length - 1)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _goToRoom(_currentRoomIdx + 1),
+                icon: Text(
+                  _rooms[_currentRoomIdx + 1].displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                label: const Icon(Icons.arrow_forward, size: 18),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _promptSubmit,
+                icon: const Icon(Icons.check_circle, size: 18),
+                label: const Text(
+                  'Submit',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OceanTheme.success,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -515,19 +748,38 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     return _stepCard(
       icon: Icons.camera_alt,
       iconColor: OceanTheme.primary,
-      title: 'Before Photo Required',
+      title: 'Before Photo',
       description:
           'Take a photo showing the current state of this room before cleaning begins.',
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _uploading ? null : _handleBeforePhoto,
-          icon: const Icon(Icons.camera_alt),
-          label: Text(_uploading ? 'Uploading...' : 'Take Before Photo'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _uploading ? null : _handleBeforePhoto,
+              icon: const Icon(Icons.camera_alt),
+              label: Text(_uploading ? 'Uploading...' : 'Take Before Photo'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                setState(() => _roomStep = RoomStep.tasks);
+                final room = _currentRoom;
+                if (room != null) _fetchTasks(room.roomId);
+              },
+              child: const Text(
+                'Skip to Checklist →',
+                style: TextStyle(color: OceanTheme.textSecondary),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -738,12 +990,21 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
             maxLines: 3,
           ),
 
-          // Next button
-          if (_allRequiredTasksDone) ...[
-            const SizedBox(height: 16),
-            _nextButton(
-              label: 'All Tasks Done \u2192 Take After Photo',
-              onPressed: () => setState(() => _roomStep = RoomStep.afterPhoto),
+          // Next button — always shown, highlighted when all done
+          const SizedBox(height: 16),
+          _nextButton(
+            label: _allRequiredTasksDone
+                ? 'All Tasks Done → Take After Photo'
+                : 'Continue → Take After Photo',
+            onPressed: () => setState(() => _roomStep = RoomStep.afterPhoto),
+          ),
+          if (!_allRequiredTasksDone) ...[
+            const SizedBox(height: 4),
+            const Center(
+              child: Text(
+                'Some required tasks are not yet completed',
+                style: TextStyle(fontSize: 11, color: OceanTheme.warning),
+              ),
             ),
           ],
         ],

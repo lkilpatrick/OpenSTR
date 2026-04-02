@@ -4,7 +4,7 @@ import 'theme.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/schedule/schedule_screen.dart';
-import 'screens/standards/standards_screen.dart';
+
 import 'screens/profile/profile_screen.dart';
 import 'screens/history/past_cleans_screen.dart';
 import 'screens/session/active_session_screen.dart';
@@ -97,12 +97,11 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
-  static const _titles = ['Schedule', 'History', 'Standards', 'Profile'];
+  static const _titles = ['Schedule', 'History', 'Profile'];
 
   final _screens = const [
     ScheduleScreen(),
     PastCleansScreen(),
-    StandardsScreen(),
     ProfileScreen(),
   ];
 
@@ -120,10 +119,6 @@ class _MainShellState extends State<MainShell> {
             label: 'Schedule',
           ),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-          NavigationDestination(
-            icon: Icon(Icons.checklist),
-            label: 'Standards',
-          ),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

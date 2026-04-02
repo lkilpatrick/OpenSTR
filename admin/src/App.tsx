@@ -12,6 +12,7 @@ import CleanersPage from './pages/CleanersPage';
 import StandardsPage from './pages/StandardsPage';
 import PropertiesPage from './pages/PropertiesPage';
 import TeamPage from './pages/TeamPage';
+import MessagesPage from './pages/MessagesPage';
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="cleanings" element={<CleaningsPage />} />
             <Route path="checklists" element={<ChecklistsPage />} />
             <Route path="issues" element={<IssuesPage />} />
+            <Route path="messages" element={<MessagesPage />} />
             <Route path="cleaners" element={<CleanersPage />} />
             <Route path="standards" element={<StandardsPage />} />
             <Route path="properties" element={<PropertiesPage />} />
