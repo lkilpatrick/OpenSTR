@@ -90,6 +90,8 @@ describe('GET /sessions/:sessionId', () => {
 
 describe('POST /sessions', () => {
   it('creates a session as owner', async () => {
+    // pool.query for primary cleaner auto-assign
+    mockQuery.mockResolvedValueOnce({ rows: [{ user_id: 'c1' }] });
     mockClient.query
       .mockResolvedValueOnce(undefined) // BEGIN
       .mockResolvedValueOnce({ rows: [{ id: 's-new', status: 'pending' }] }) // INSERT session
@@ -199,5 +201,62 @@ describe('GET /sessions/:sessionId/rooms', () => {
     const res = await request(app).get('/sessions/s1/rooms');
     expect(res.status).toBe(200);
     expect(res.body[0].display_name).toBe('Kitchen');
+  });
+});
+
+describe('PATCH /sessions/:sessionId/status — rejection_reason required', () => {
+  it('rejects without reason when status=rejected', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ status: 'submitted', cleaner_id: 'c1' }] });
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/status').send({ status: 'rejected' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/rejection_reason/i);
+  });
+
+  it('accepts reject with reason', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ status: 'submitted', cleaner_id: 'c1' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 's1', status: 'rejected' }] });
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/status').send({ status: 'rejected', rejection_reason: 'Missed bathroom' });
+    expect(res.status).toBe(200);
+  });
+
+  it('allows approved → rejected (reopen)', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ status: 'approved', cleaner_id: 'c1' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 's1', status: 'rejected' }] });
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/status').send({ status: 'rejected', rejection_reason: 'Found issues after' });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('PATCH /sessions/:sessionId/room-cleans/:roomCleanId', () => {
+  it('reverts room clean status as owner', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rc1', status: 'pending' }] });
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/room-cleans/rc1').send({ status: 'pending' });
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects invalid status', async () => {
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/room-cleans/rc1').send({ status: 'invalid' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for missing room clean', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/room-cleans/rc1').send({ status: 'pending' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects cleaner role', async () => {
+    currentUser = { userId: 'u1', role: 'cleaner', propertyIds: ['p1'] };
+    const app = buildApp();
+    const res = await request(app).patch('/sessions/s1/room-cleans/rc1').send({ status: 'pending' });
+    expect(res.status).toBe(403);
   });
 });

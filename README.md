@@ -28,21 +28,21 @@ Built for Airbnb hosts. Works for any short-term rental platform.
 
 ## Architecture
 
-OpenSTR is a monorepo with three apps:
+OpenSTR is a monorepo with four apps:
 
 ```
 openstr/
-├── api/          # Node.js + Express REST API (TypeScript)
-├── admin/        # React + Vite admin panel (TypeScript)
-├── mobile/       # React Native (Expo) cleaner app
-└── shared/       # Shared TypeScript types
+├── api/              # Node.js + Express REST API (TypeScript)
+├── admin/            # React + Vite admin panel (TypeScript)
+├── mobile_flutter/   # Flutter cleaner app (iOS, Android, Web)
+└── shared/           # Shared TypeScript types
 ```
 
 | Service | Tech | Port |
 |---------|------|------|
 | API | Express + PostgreSQL | 3000 |
 | Admin | React + Vite | 5173 |
-| Mobile | Expo (React Native) | 8083 |
+| Mobile | Flutter (Web served at /app/) | — |
 | Database | PostgreSQL 16 | 5432 |
 
 ---
@@ -92,14 +92,15 @@ JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
 ```bash
 cd api
 npx node-pg-migrate up --database-url-var DATABASE_URL
-npm run db:seed:full
+npm run db:seed:demo    # Generic demo data (open source)
+# — OR —
+npm run db:seed:full    # Your personal property data (private fork)
 ```
 
-This creates:
-- **Admin user**: `admin@openstr.dev` / `admin123`
-- **Cleaner user**: `dallas@openstr.dev` / `dallas123`
-- **Properties**: My STR Property (STR) + Upstairs (residence)
-- Full rooms, tasks, sessions, issues, messages, and ratings
+Demo seed credentials:
+- **Admin user**: `admin@demo.openstr.dev` / `admin123`
+- **Cleaner user**: `cleaner@demo.openstr.dev` / `cleaner123`
+- **Property**: Beach House (STR) with rooms, tasks, reservations, and sessions
 
 ### 5. Start the API and Admin panel
 
@@ -112,10 +113,89 @@ npm run dev:admin   # Admin on http://localhost:5173
 ### 6. Start the Mobile app (optional)
 
 ```bash
-cd mobile
-npx expo start
+cd mobile_flutter
+flutter run -d chrome --dart-define=API_URL=http://localhost:3000
+# or on a physical device:
+flutter run --dart-define=API_URL=http://YOUR_LAN_IP:3000
 ```
-Scan the QR code with Expo Go (Android) or Camera app (iOS).
+
+---
+
+## Production Deployment (Linux Server)
+
+OpenSTR is designed to self-host on a Linux server using Docker.
+
+### Prerequisites
+- Linux server (Ubuntu 22.04+ recommended)
+- Docker + Docker Compose v2
+- A domain name pointing to your server (for SSL)
+- Port 80 and 443 open
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/lkilpatrick/OpenSTR.git
+cd OpenSTR
+cp .env.production.example .env.production
+nano .env.production   # Fill in DOMAIN, passwords, secrets
+```
+
+Generate secrets:
+```bash
+openssl rand -base64 32   # Use for JWT_SECRET
+openssl rand -base64 32   # Use for JWT_REFRESH_SECRET
+openssl rand -base64 32   # Use for BETTER_AUTH_SECRET
+```
+
+### 2. Deploy
+
+```bash
+chmod +x deploy.sh
+./deploy.sh              # Build, migrate, start everything
+```
+
+This will:
+- Build the API, admin panel, and mobile web app as Docker containers
+- Start PostgreSQL, the API, and nginx with SSL
+- Run database migrations
+- Generate a self-signed cert if no SSL certs exist yet
+
+### 3. Set up SSL (recommended)
+
+```bash
+./deploy.sh --ssl        # Automated Let's Encrypt certificate
+```
+
+### 4. Seed data
+
+```bash
+./deploy.sh --seed-demo  # Generic demo data
+```
+
+### 5. Access your instance
+
+| Service | URL |
+|---------|-----|
+| Admin panel | `https://yourdomain.com` |
+| Mobile web app | `https://yourdomain.com/app/` |
+| API | `https://yourdomain.com/api/` |
+
+### Other commands
+
+```bash
+./deploy.sh --update     # Pull latest, rebuild, migrate, restart
+./deploy.sh --logs       # Tail container logs
+./deploy.sh --stop       # Stop all services
+```
+
+### Network-aware mobile app
+
+The mobile app detects whether the cleaner is on your local WiFi or accessing remotely:
+
+- **Remote access**: Can view schedule, accept assignments, view history
+- **Local WiFi only**: Can start and continue cleaning sessions
+
+This is enforced by nginx's `geo` module which tags requests with an `X-Is-Local` header based on the client's IP range. The mobile app calls `/api/network-check` to detect its status.
 
 ---
 
@@ -164,14 +244,23 @@ All endpoints require JWT auth (`Authorization: Bearer <token>`).
 
 ## Mobile App
 
-Built with Expo (React Native) for iOS and Android.
+Built with Flutter for iOS, Android, and Web.
 
-**For cleaners:** Schedule view, room checklists, photo capture, supply alerts.
+**For cleaners:** Schedule view, accept/claim assignments, room checklists, photo capture, supply alerts, cleaning history with detail drill-down.
 
-**Requirements:**
-- Node.js 20+
-- Expo Go app on your phone
-- Set `EXPO_PUBLIC_API_URL` to your API server address
+**Features:**
+- **Network-aware**: Detects local WiFi vs remote access — schedule viewing works anywhere, but starting a clean requires being on-site
+- **3-tab navigation**: Schedule, History, Profile
+- **Photo evidence**: Before/after photos with metadata and expandable viewer
+- **Real-time status**: Pull-to-refresh with auto-refresh after session submission
+
+**Development:**
+```bash
+cd mobile_flutter
+flutter run --dart-define=API_URL=http://localhost:3000
+```
+
+**Production:** The Flutter web build is automatically included in `docker-compose.prod.yml` and served at `/app/`.
 
 ---
 
@@ -184,9 +273,14 @@ Built with Expo (React Native) for iOS and Android.
 - [x] Home Assistant / smart lock integration
 - [x] Calendar dashboard with stays and cleans
 - [x] Room management (add, rename, reorder, archive)
+- [x] Flutter mobile app (Schedule, History, Profile)
+- [x] Photo evidence with before/after viewer
+- [x] Network-aware WiFi restriction for cleaning actions
+- [x] Docker production deployment with SSL
+- [x] Cleaner pay tracking
 - [ ] VRBO / Booking.com iCal support
 - [ ] Direct booking calendar (no OTA)
-- [ ] Mobile app on App Store / Play Store
+- [ ] Native iOS / Android app builds
 - [ ] Zapier / webhook integrations
 - [ ] Multi-language support
 

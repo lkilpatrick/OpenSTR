@@ -13,6 +13,7 @@ interface Session {
   cleaner_start_time?: string;
   cleaner_end_time?: string;
   compliance_score?: number;
+  rejection_reason?: string;
 }
 
 interface RoomClean {
@@ -117,6 +118,14 @@ export default function CleaningsPage() {
     },
   });
 
+  const uncompleteTaskMutation = useMutation({
+    mutationFn: ({ roomCleanId, taskId }: { roomCleanId: string; taskId: string }) =>
+      api.delete(`/photos/${roomCleanId}/tasks/${taskId}/complete`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['room-tasks', expandedRoom] });
+    },
+  });
+
   const filtered = (sessions ?? []).filter(s => statusFilter === 'all' || s.status === statusFilter);
   const beforePhotos = (roomPhotos ?? []).filter(p => p.type === 'before');
   const afterPhotos = (roomPhotos ?? []).filter(p => p.type === 'after');
@@ -189,6 +198,14 @@ export default function CleaningsPage() {
 
           {/* Per-room accordion */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+
+            {/* Show rejection reason if session was previously rejected */}
+            {selected.rejection_reason && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: '#991b1b', marginBottom: 4 }}>Rejection Reason</div>
+                <div style={{ fontSize: 13, color: '#7f1d1d' }}>{selected.rejection_reason}</div>
+              </div>
+            )}
             {(roomCleans ?? []).map(rc => {
               const isOpen = expandedRoom === rc.id;
               return (
@@ -235,8 +252,16 @@ export default function CleaningsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {(roomTasks ?? []).map(t => (
                             <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                              <span style={{ color: t.completed ? '#10b981' : '#ef4444' }}>{t.completed ? '✓' : '✗'}</span>
-                              <span>{t.label}</span>
+                              {t.completed ? (
+                                <button
+                                  title="Uncheck this task"
+                                  onClick={() => uncompleteTaskMutation.mutate({ roomCleanId: rc.id, taskId: t.task_id })}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', fontSize: 15, padding: 0 }}
+                                >✓</button>
+                              ) : (
+                                <span style={{ color: '#ef4444', fontSize: 15 }}>✗</span>
+                              )}
+                              <span style={{ textDecoration: !t.completed ? 'line-through' : 'none', color: !t.completed ? '#94a3b8' : undefined }}>{t.label}</span>
                               {t.notes && <span style={{ color: '#94a3b8', fontSize: 11 }}>— {t.notes}</span>}
                             </div>
                           ))}
@@ -268,14 +293,18 @@ export default function CleaningsPage() {
           )}
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {selected.status === 'submitted' && (
               <>
                 <button onClick={() => reviewMutation.mutate({ id: selected.id, status: 'approved' })}
                   style={{ ...actionBtn, background: '#10b981' }}>Approve</button>
                 <button onClick={() => setRejectId(selected.id)}
-                  style={{ ...actionBtn, background: '#ef4444' }}>Reject</button>
+                  style={{ ...actionBtn, background: '#ef4444' }}>Send Back to Cleaner</button>
               </>
+            )}
+            {selected.status === 'approved' && (
+              <button onClick={() => setRejectId(selected.id)}
+                style={{ ...actionBtn, background: '#f97316' }}>Reopen &amp; Send Back</button>
             )}
             <button onClick={() => { if (confirm('Delete this session and all its data? This cannot be undone.')) deleteMutation.mutate(selected.id); }}
               style={{ ...actionBtn, background: '#991b1b' }}>Delete</button>

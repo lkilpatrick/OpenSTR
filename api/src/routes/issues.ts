@@ -21,6 +21,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 // POST /issues
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   const { property_id, session_id, title, description, severity } = req.body;
+  if (!property_id || !title) { res.status(400).json({ error: 'property_id and title are required' }); return; }
   const result = await pool.query(
     `INSERT INTO issues (property_id, session_id, reported_by, title, description, severity)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,

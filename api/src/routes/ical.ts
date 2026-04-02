@@ -44,7 +44,7 @@ async function syncPropertyIcal(propertyId: string): Promise<{ synced: number; c
 // POST /ical/sync/:propertyId — trigger iCal sync
 router.post('/sync/:propertyId', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await syncPropertyIcal(req.params.propertyId);
+    const result = await syncPropertyIcal(req.params.propertyId as string);
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Sync failed';
