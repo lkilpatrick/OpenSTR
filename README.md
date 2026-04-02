@@ -6,7 +6,7 @@
 
 **Open source short-term rental management for hosts who want a real system.**
 
-OpenSTR is a self-hosted platform that replaces the chaos of WhatsApp messages, spreadsheets, and Google Forms with a proper cleaning management system — scheduling, checklists, photo evidence, supply tracking, and Superhost KPI monitoring, all in one place.
+OpenSTR is a self-hosted platform that replaces the chaos of WhatsApp messages, spreadsheets, and Google Forms with a proper cleaning management system — scheduling, checklists, photo evidence, supply tracking, and monitoring, all in one place.
 
 Built for Airbnb hosts. Works for any short-term rental platform.
 
@@ -19,10 +19,9 @@ Built for Airbnb hosts. Works for any short-term rental platform.
 - **Structured checklists** — room-by-room task lists with drag-and-drop reorder
 - **Photo evidence** — mandatory before/after photos per room for every clean
 - **Multi-property** — manage your STR, your home, and future properties from one dashboard
-- **Multi-cleaner** — assign cleaners per property, track performance, compare against your standard
-- **Superhost tracker** — live KPI dashboard tracking your 4.8 rating, response rate, and completed stays
+- **Multi-cleaner** — assign cleaners per property, track performance, compare against your standards.
 - **Supply alerts** — cleaners flag low stock inline; you see it on the dashboard
-- **Smart lock trigger** — integrates with Home Assistant + August lock to auto-start sessions
+- **Local hosting and wifi** — your cleaner sees their schedule and can claim cleans from their phone from anywhere, but the cleaning checklists and photos only activate when on your local wifi (optional)
 
 ---
 
