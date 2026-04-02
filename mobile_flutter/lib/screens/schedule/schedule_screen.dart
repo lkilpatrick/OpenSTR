@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../theme.dart';
 import '../../services/api_service.dart';
+import '../../services/network_service.dart';
 import '../../models/models.dart';
 
 class ScheduleScreen extends StatefulWidget {
@@ -225,20 +227,27 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       }
     }
 
+    final isLocal = context.watch<NetworkService>().isLocal;
+
     return RefreshIndicator(
       color: OceanTheme.primary,
-      onRefresh: _fetchUpcoming,
+      onRefresh: () async {
+        await NetworkService().checkNetwork(force: true);
+        await _fetchUpcoming();
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (todayCleans.isNotEmpty) ...[
             _sectionHeader('Today'),
-            ...todayCleans.map((c) => _buildCleanCard(c, isToday: true)),
+            ...todayCleans.map(
+              (c) => _buildCleanCard(c, isToday: true, isLocal: isLocal),
+            ),
             const SizedBox(height: 16),
           ],
           if (thisWeekCleans.isNotEmpty) ...[
             _sectionHeader('This Week'),
-            ...thisWeekCleans.map((c) => _buildCleanCard(c)),
+            ...thisWeekCleans.map((c) => _buildCleanCard(c, isLocal: isLocal)),
             const SizedBox(height: 16),
           ],
           if (laterCleans.isNotEmpty) ...[
@@ -247,7 +256,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ? 'Upcoming Cleans'
                   : 'Later',
             ),
-            ...laterCleans.map((c) => _buildCleanCard(c)),
+            ...laterCleans.map((c) => _buildCleanCard(c, isLocal: isLocal)),
           ],
         ],
       ),
@@ -268,7 +277,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildCleanCard(UpcomingClean clean, {bool isToday = false}) {
+  Widget _buildCleanCard(
+    UpcomingClean clean, {
+    bool isToday = false,
+    bool isLocal = true,
+  }) {
     final hasSession = clean.sessionId != null;
     final isPending = clean.sessionStatus == 'pending';
     final isAccepted = clean.sessionStatus == 'accepted';
@@ -513,18 +526,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await Navigator.of(
-                      context,
-                    ).pushNamed('/session', arguments: clean.sessionId);
-                    _fetchUpcoming();
-                  },
-                  child: const Text(
-                    'Start Clean →',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
+                child: isLocal
+                    ? ElevatedButton(
+                        onPressed: () async {
+                          await Navigator.of(
+                            context,
+                          ).pushNamed('/session', arguments: clean.sessionId);
+                          _fetchUpcoming();
+                        },
+                        child: const Text(
+                          'Start Clean →',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      )
+                    : _remoteBlockedButton('Start Clean'),
               ),
             ),
           // Continue button for in-progress sessions
@@ -533,22 +548,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await Navigator.of(
-                      context,
-                    ).pushNamed('/session', arguments: clean.sessionId);
-                    _fetchUpcoming();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF16A34A),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text(
-                    'Continue Clean →',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
+                child: isLocal
+                    ? ElevatedButton(
+                        onPressed: () async {
+                          await Navigator.of(
+                            context,
+                          ).pushNamed('/session', arguments: clean.sessionId);
+                          _fetchUpcoming();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16A34A),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text(
+                          'Continue Clean →',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      )
+                    : _remoteBlockedButton('Continue Clean'),
               ),
             ),
           // Claim button for unassigned cleans (no session yet)
@@ -572,6 +589,37 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _remoteBlockedButton(String label) {
+    return ElevatedButton.icon(
+      onPressed: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Connect to property WiFi to start cleaning'),
+                ),
+              ],
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      },
+      icon: const Icon(Icons.wifi_off, size: 16),
+      label: Text(
+        '$label (WiFi required)',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFE2E8F0),
+        foregroundColor: const Color(0xFF64748B),
+        padding: const EdgeInsets.symmetric(vertical: 16),
       ),
     );
   }

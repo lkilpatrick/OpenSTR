@@ -11,6 +11,7 @@
     "db:migrate": "node-pg-migrate up",
     "db:rollback": "node-pg-migrate down",
     "db:seed": "tsx src/db/seed.ts",
+    "db:seed:demo": "tsx src/db/seed-demo.ts",
     "db:seed:full": "tsx src/db/seed-full.ts",
     "db:seed:owner": "tsx src/db/seed-owner.ts"
   },

@@ -81,6 +81,20 @@ router.post('/:roomCleanId/tasks/:taskId/complete', async (req: AuthRequest, res
   res.status(201).json(result.rows[0]);
 });
 
+// DELETE /photos/:roomCleanId/tasks/:taskId/complete — uncomplete a task (admin only)
+router.delete('/:roomCleanId/tasks/:taskId/complete', async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user || !['owner', 'admin'].includes(req.user.role)) {
+    res.status(403).json({ error: 'Only owners/admins can uncomplete tasks' });
+    return;
+  }
+  const result = await pool.query(
+    `DELETE FROM task_completions WHERE room_clean_id = $1 AND task_id = $2 RETURNING *`,
+    [req.params.roomCleanId, req.params.taskId]
+  );
+  if (!result.rows[0]) { res.status(404).json({ error: 'Task completion not found' }); return; }
+  res.json({ message: 'Task uncompleted' });
+});
+
 // DELETE /photos/file/:photoId — delete a single photo
 router.delete('/file/:photoId', async (req: AuthRequest, res: Response): Promise<void> => {
   const result = await pool.query(`DELETE FROM photos WHERE id = $1 RETURNING id, storage_path`, [req.params.photoId]);

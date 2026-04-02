@@ -12,7 +12,7 @@ const VALID_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   accepted: ['in_progress'],
   in_progress: ['submitted'],
   submitted: ['approved', 'rejected'],
-  approved: [],
+  approved: ['rejected'],
   rejected: ['in_progress'],
 };
 
@@ -407,6 +407,10 @@ router.patch('/:sessionId/status', async (req: AuthRequest, res: Response): Prom
     extraFields.reviewed_by = req.user!.userId;
   }
   if (status === 'rejected' && rejection_reason) extraFields.rejection_reason = rejection_reason;
+  if (status === 'rejected' && !rejection_reason?.trim()) {
+    res.status(400).json({ error: 'rejection_reason is required when rejecting a session' });
+    return;
+  }
 
   const setClauses = Object.keys(extraFields).map((k, i) => `${k} = $${i + 3}`);
   const result = await pool.query(
@@ -536,6 +540,22 @@ router.post('/:sessionId/notes', async (req: AuthRequest, res: Response): Promis
     [req.params.sessionId, req.user!.userId, note.trim()]
   );
   res.status(201).json(result.rows[0]);
+});
+
+// PATCH /sessions/:sessionId/room-cleans/:roomCleanId — update room clean status (admin revert)
+router.patch('/:sessionId/room-cleans/:roomCleanId', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  const { status } = req.body as { status?: string };
+  const validStatuses = ['pending', 'in_progress', 'completed', 'skipped'];
+  if (!status || !validStatuses.includes(status)) {
+    res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    return;
+  }
+  const result = await pool.query(
+    `UPDATE room_cleans SET status = $1, updated_at = now() WHERE id = $2 AND session_id = $3 RETURNING *`,
+    [status, req.params.roomCleanId, req.params.sessionId]
+  );
+  if (!result.rows[0]) { res.status(404).json({ error: 'Room clean not found' }); return; }
+  res.json(result.rows[0]);
 });
 
 export default router;

@@ -73,7 +73,7 @@ router.patch('/:propertyId', requireRole('owner', 'admin'), async (req: AuthRequ
   if (!result.rows[0]) { res.status(404).json({ error: 'Not Found' }); return; }
   // Auto-sync iCal whenever ical_url is set/changed
   if (req.body.ical_url && req.body.ical_url.trim()) {
-    try { await syncPropertyIcal(req.params.propertyId); } catch { /* sync errors are non-fatal */ }
+    try { await syncPropertyIcal(req.params.propertyId as string); } catch { /* sync errors are non-fatal */ }
   }
   res.json(result.rows[0]);
 });

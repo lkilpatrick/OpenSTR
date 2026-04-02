@@ -2,17 +2,94 @@ version: '3.9'
 
 services:
   postgres:
+    image: postgres:16-alpine
     restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openstr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-openstr}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openstr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
     restart: always
     environment:
       NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-openstr}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openstr}
+      POSTGRES_HOST: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://localhost}
+      ADMIN_URL: ${ADMIN_URL:-https://localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      PHOTO_STORAGE_PATH: /photos
+      PORT: 3000
+    volumes:
+      - photos:/photos
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  admin-build:
+    build:
+      context: .
+      dockerfile: docker/admin/Dockerfile
+      args:
+        VITE_API_URL: https://${DOMAIN}
+    volumes:
+      - admin_dist:/output
+    entrypoint: ["sh", "-c", "cp -r /usr/share/nginx/html/* /output/"]
+    restart: "no"
+
+  mobile-build:
+    build:
+      context: .
+      dockerfile: docker/mobile/Dockerfile
+      args:
+        API_URL: https://${DOMAIN}
+    volumes:
+      - mobile_dist:/output
+    entrypoint: ["sh", "-c", "cp -r /app/build/* /output/"]
+    restart: "no"
 
   nginx:
+    image: nginx:alpine
     restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - photos:/photos:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - admin_dist:/usr/share/nginx/html:ro
+      - mobile_dist:/usr/share/nginx/mobile:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      admin-build:
+        condition: service_completed_successfully
+      mobile-build:
+        condition: service_completed_successfully
 
-  # No adminer in production
-  adminer:
-    profiles:
-      - dev
+volumes:
+  postgres_data:
+  photos:
+  admin_dist:
+  mobile_dist:
+
