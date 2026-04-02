@@ -52,6 +52,7 @@ const NAV_ITEMS = [
   { to: '/team', label: 'Team' },
   { to: '/checklists', label: 'Checklists' },
   { to: '/issues', label: 'Issues' },
+  { to: '/messages', label: 'Messages' },
   { to: '/cleaners', label: 'Cleaner Pay' },
   { to: '/standards', label: 'Standards' },
   { to: '/properties', label: 'Properties' },

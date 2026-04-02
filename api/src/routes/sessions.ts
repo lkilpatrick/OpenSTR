@@ -149,7 +149,7 @@ router.post('/:sessionId/accept', async (req: AuthRequest, res: Response): Promi
     return;
   }
   const result = await pool.query(
-    `UPDATE clean_sessions SET status = 'accepted', accepted_at = now(), updated_at = now() WHERE id = $1 RETURNING *`,
+    `UPDATE clean_sessions SET status = 'accepted', updated_at = now() WHERE id = $1 RETURNING *`,
     [req.params.sessionId]
   );
   res.json(result.rows[0]);
@@ -233,16 +233,16 @@ router.post('/claim', async (req: AuthRequest, res: Response): Promise<void> => 
     await client.query('BEGIN');
 
     const sessionResult = await client.query(
-      `INSERT INTO clean_sessions (property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date, status, accepted_at)
-       VALUES ($1, $2, 'turnover', 'cleaner_claim', $3, $4, 'accepted', now()) RETURNING *`,
+      `INSERT INTO clean_sessions (property_id, cleaner_id, session_type, triggered_by, reservation_id, scheduled_date, status)
+       VALUES ($1, $2, 'turnover', 'cleaner_claim', $3, $4, 'accepted') RETURNING *`,
       [property_id, cleanerId, reservation_id, scheduled_date ?? null]
     );
     const session = sessionResult.rows[0];
 
     // Auto-create room_cleans for each room in the property
     await client.query(
-      `INSERT INTO room_cleans (session_id, room_id)
-       SELECT $1, id FROM rooms WHERE property_id = $2 AND archived = false`,
+      `INSERT INTO room_cleans (session_id, room_id, status)
+       SELECT $1, id, 'pending' FROM rooms WHERE property_id = $2 AND archived = false`,
       [session.id, property_id]
     );
 
@@ -284,8 +284,8 @@ router.post('/', requireRole('owner', 'admin'), async (req: AuthRequest, res: Re
 
     // Auto-create room_cleans for each room in the property
     await client.query(
-      `INSERT INTO room_cleans (session_id, room_id)
-       SELECT $1, id FROM rooms WHERE property_id = $2 AND archived = false`,
+      `INSERT INTO room_cleans (session_id, room_id, status)
+       SELECT $1, id, 'pending' FROM rooms WHERE property_id = $2 AND archived = false`,
       [session.id, property_id]
     );
 
@@ -362,8 +362,8 @@ router.post('/schedule', requireRole('owner', 'admin'), async (req: AuthRequest,
 
     // Auto-create room_cleans
     await client.query(
-      `INSERT INTO room_cleans (session_id, room_id)
-       SELECT $1, id FROM rooms WHERE property_id = $2 AND archived = false`,
+      `INSERT INTO room_cleans (session_id, room_id, status)
+       SELECT $1, id, 'pending' FROM rooms WHERE property_id = $2 AND archived = false`,
       [session.id, property_id]
     );
 
