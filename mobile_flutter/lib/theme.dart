@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 class OceanTheme {
   // Issue #16 design tokens
-  static const primary = Color(0xFF0D7E8A);    // Teal
-  static const secondary = Color(0xFF1A5FA8);  // Blue
+  static const primary = Color(0xFF0D7E8A); // Teal
+  static const secondary = Color(0xFF1A5FA8); // Blue
   static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFF5F7FA);
   static const text = Color(0xFF1A2332);
   static const textSecondary = Color(0xFF64748B);
-  static const accent = Color(0xFFE0F4F6);     // Light Teal
+  static const accent = Color(0xFFE0F4F6); // Light Teal
   static const error = Color(0xFFEF4444);
   static const success = Color(0xFF10B981);
   static const warning = Color(0xFFF59E0B);
@@ -25,17 +25,28 @@ class OceanTheme {
   static const ratingRed = Color(0xFFEF4444);
 
   // Turnaround colors
-  static const turnaroundGood = Color(0xFF10B981);   // >4hr
-  static const turnaroundWarn = Color(0xFFF59E0B);   // 2-4hr
+  static const turnaroundGood = Color(0xFF10B981); // >4hr
+  static const turnaroundWarn = Color(0xFFF59E0B); // 2-4hr
   static const turnaroundUrgent = Color(0xFFEF4444); // <2hr
 
   static Color statusColor(String status) {
     switch (status) {
-      case 'pending': return statusPending;
-      case 'in_progress': return statusInProgress;
-      case 'submitted': return statusSubmitted;
-      case 'approved': return statusApproved;
-      default: return const Color(0xFF6B7280);
+      case 'pending':
+        return statusPending;
+      case 'in_progress':
+        return statusInProgress;
+      case 'submitted':
+        return statusSubmitted;
+      case 'approved':
+        return statusApproved;
+      case 'completed':
+        return statusApproved;
+      case 'rejected':
+        return const Color(0xFFEF4444);
+      case 'skipped':
+        return const Color(0xFF6B7280);
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
@@ -73,7 +84,11 @@ class OceanTheme {
       indicatorColor: accent,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return const TextStyle(color: primary, fontWeight: FontWeight.w600, fontSize: 12);
+          return const TextStyle(
+            color: primary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          );
         }
         return const TextStyle(color: textSecondary, fontSize: 12);
       }),
