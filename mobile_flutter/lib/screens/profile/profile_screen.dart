@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/network_service.dart';
 import 'about_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -10,6 +11,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
+    final network = context.watch<NetworkService>();
     final user = auth.user;
 
     return ListView(
@@ -25,7 +27,9 @@ class ProfileScreen extends StatelessWidget {
                   radius: 28,
                   backgroundColor: OceanTheme.accent,
                   child: Text(
-                    (user?.name.isNotEmpty == true) ? user!.name[0].toUpperCase() : '?',
+                    (user?.name.isNotEmpty == true)
+                        ? user!.name[0].toUpperCase()
+                        : '?',
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -56,7 +60,10 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: OceanTheme.accent,
                           borderRadius: BorderRadius.circular(4),
@@ -84,7 +91,10 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.info_outline, color: OceanTheme.primary),
+                leading: const Icon(
+                  Icons.info_outline,
+                  color: OceanTheme.primary,
+                ),
                 title: const Text('About OpenSTR'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
@@ -97,17 +107,60 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Logout
+        // Dev settings
+        Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Text(
+                  'DEVELOPER',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: OceanTheme.textSecondary,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              SwitchListTile(
+                title: const Text('Simulate WiFi Connected'),
+                subtitle: Text(
+                  network.devOverride
+                      ? 'Override ON — acting as local'
+                      : 'Override OFF — using real check',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                secondary: Icon(
+                  network.isLocal ? Icons.wifi : Icons.wifi_off,
+                  color: network.isLocal
+                      ? OceanTheme.success
+                      : OceanTheme.textSecondary,
+                ),
+                value: network.devOverride,
+                activeColor: OceanTheme.primary,
+                onChanged: (val) => network.setDevOverride(val),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () => auth.logout(),
             icon: const Icon(Icons.logout, color: OceanTheme.error),
-            label: const Text('Sign Out', style: TextStyle(color: OceanTheme.error)),
+            label: const Text(
+              'Sign Out',
+              style: TextStyle(color: OceanTheme.error),
+            ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: OceanTheme.error),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
         ),

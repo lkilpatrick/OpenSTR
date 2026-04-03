@@ -51,6 +51,11 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// In dev, always report local network (production uses nginx geo module)
+app.get('/network-check', (_req, res) => {
+  res.json({ is_local: 1 });
+});
+
 app.use('/properties', propertiesRouter);
 app.use('/users', usersRouter);
 app.use('/sessions', sessionsRouter);

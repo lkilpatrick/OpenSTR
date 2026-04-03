@@ -11,10 +11,18 @@ class NetworkService extends ChangeNotifier {
 
   bool _isLocal = false;
   bool _checking = false;
+  bool _devOverride = false;
   DateTime? _lastCheck;
 
-  bool get isLocal => _isLocal;
+  bool get isLocal => _devOverride || _isLocal;
   bool get checking => _checking;
+  bool get devOverride => _devOverride;
+
+  /// Toggle dev override — forces isLocal to true for localhost testing
+  void setDevOverride(bool value) {
+    _devOverride = value;
+    notifyListeners();
+  }
 
   /// How often to re-check (don't hammer the server)
   static const _checkInterval = Duration(minutes: 2);
