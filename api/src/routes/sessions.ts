@@ -219,7 +219,7 @@ router.get('/:sessionId/detail', async (req: AuthRequest, res: Response): Promis
     );
 
     taskCompletions = await pool.query(
-      `SELECT tc.*, t.label, t.task_type, t.required as is_required, t.category, t.is_high_touch, t.display_order as task_order
+      `SELECT tc.*, t.label, t.is_mandatory as is_required, t.category, t.is_high_touch, t.display_order as task_order
        FROM task_completions tc
        JOIN tasks t ON t.id = tc.task_id
        WHERE tc.room_clean_id IN (${placeholders})
