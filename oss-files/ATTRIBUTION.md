@@ -2,7 +2,7 @@
 
 ## Origin
 
-OpenSTR was created by Property Owner in 2026.
+OpenSTR was created by Luke Kilpatrick in 2026.
 
 It started as a personal tool to manage cleaning operations for a short-term
 rental property — replacing a Google Form with a proper system for scheduling,
@@ -22,7 +22,7 @@ If you deploy OpenSTR in a way that is accessible to users (guests, cleaners,
 or staff), you must display the following notice somewhere visible in the UI —
 a footer, About screen, or Credits page is fine:
 
-> "Powered by OpenSTR — created by Property Owner"
+> "Powered by OpenSTR — created by Luke Kilpatrick"
 > https://github.com/lkilpatrick/openstr
 
 This is a condition of the GPL-3.0 license as applied to this project.
