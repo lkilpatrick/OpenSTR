@@ -1,6 +1,6 @@
 /**
- * Seed script to create the owner account for owner@openstr.dev
- * using better-auth's server-side API.
+ * Seed script to create the initial owner account.
+ * Update the email, name, and password below before running.
  *
  * Usage: npx tsx src/db/seed-owner.ts
  */
