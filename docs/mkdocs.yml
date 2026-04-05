@@ -1,0 +1,81 @@
+site_name: OpenSTR Documentation
+site_description: Open source short-term rental cleaning management platform
+site_url: https://openstr.dev/docs/
+repo_url: https://github.com/lkilpatrick/OpenSTR
+repo_name: lkilpatrick/OpenSTR
+use_directory_urls: true
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    logo: material/home-outline
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+extra:
+  homepage: https://openstr.dev
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Quick Start: getting-started/quick-start.md
+      - Production Deployment: getting-started/production-deployment.md
+      - Configuration: getting-started/configuration.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Database Schema: architecture/database-schema.md
+      - Authentication: architecture/authentication.md
+  - API Reference:
+      - Overview: api/overview.md
+      - Endpoints: api/endpoints.md
+      - Services: api/services.md
+      - Middleware: api/middleware.md
+  - Admin Panel:
+      - Overview: admin/overview.md
+      - Pages: admin/pages.md
+      - Components: admin/components.md
+  - Mobile App:
+      - Overview: mobile/overview.md
+      - Screens: mobile/screens.md
+      - Services: mobile/services.md
+      - Models: mobile/models.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
