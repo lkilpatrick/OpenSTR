@@ -30,7 +30,7 @@ COPY --from=base /app/api/migrations ./migrations
 COPY --from=base /app/api/src/db ./src/db
 COPY --from=base /app/api/src/lib ./src/lib
 
-RUN chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app && mkdir -p /photos && chown appuser:appgroup /photos
 USER appuser
 
 EXPOSE 3000
