@@ -202,6 +202,195 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     await _takePhoto('issue');
   }
 
+  // Submitted issues for this session (title + id for display)
+  final List<Map<String, String>> _submittedIssues = [];
+
+  Future<void> _showReportIssueSheet() async {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String severity = 'medium';
+    XFile? pickedPhoto;
+    bool submitting = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+            left: 20, right: 20, top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Report an Issue',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Title *',
+                    hintText: 'e.g. Broken shower head',
+                    filled: true,
+                    fillColor: OceanTheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Notes (optional)',
+                    hintText: 'Describe the issue in detail...',
+                    filled: true,
+                    fillColor: OceanTheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Severity', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    for (final s in ['low', 'medium', 'high'])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(s[0].toUpperCase() + s.substring(1)),
+                          selected: severity == s,
+                          selectedColor: s == 'high'
+                              ? OceanTheme.error
+                              : s == 'medium'
+                              ? OceanTheme.warning
+                              : OceanTheme.success,
+                          labelStyle: TextStyle(
+                            color: severity == s ? Colors.white : OceanTheme.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) => setSheet(() => severity = s),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final img = await _picker.pickImage(
+                      source: ImageSource.camera,
+                      imageQuality: 70,
+                    );
+                    if (img != null) setSheet(() => pickedPhoto = img);
+                  },
+                  icon: Icon(
+                    pickedPhoto != null ? Icons.check_circle : Icons.camera_alt,
+                    color: pickedPhoto != null ? OceanTheme.success : OceanTheme.warning,
+                  ),
+                  label: Text(
+                    pickedPhoto != null ? 'Photo attached' : 'Add Photo (optional)',
+                    style: TextStyle(
+                      color: pickedPhoto != null ? OceanTheme.success : OceanTheme.warning,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: pickedPhoto != null ? OceanTheme.success : OceanTheme.warning,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            if (titleCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter a title')),
+                              );
+                              return;
+                            }
+                            setSheet(() => submitting = true);
+                            try {
+                              // Create the issue record
+                              final res = await _api.dio.post('/issues', data: {
+                                'property_id': _propertyId,
+                                'session_id': widget.sessionId,
+                                'title': titleCtrl.text.trim(),
+                                'description': descCtrl.text.trim().isEmpty
+                                    ? null
+                                    : descCtrl.text.trim(),
+                                'severity': severity,
+                              });
+                              final issueId = res.data['id'] as String;
+
+                              // Upload photo if one was taken
+                              if (pickedPhoto != null && _currentRoom != null) {
+                                final bytes = await pickedPhoto!.readAsBytes();
+                                final formData = FormData.fromMap({
+                                  'photo': MultipartFile.fromBytes(
+                                    bytes,
+                                    filename: 'issue_${DateTime.now().millisecondsSinceEpoch}.jpg',
+                                  ),
+                                  'type': 'issue',
+                                  'taken_at': DateTime.now().toIso8601String(),
+                                });
+                                await _api.dio.post('/photos/${_currentRoom!.id}', data: formData);
+                              }
+
+                              setState(() {
+                                _submittedIssues.add({
+                                  'id': issueId,
+                                  'title': titleCtrl.text.trim(),
+                                  'severity': severity,
+                                });
+                              });
+                              if (ctx.mounted) Navigator.of(ctx).pop();
+                            } catch (_) {
+                              setSheet(() => submitting = false);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Failed to submit issue')),
+                                );
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: OceanTheme.error,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      submitting ? 'Submitting...' : 'Submit Issue',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _handleFinishRoom() {
     // Mark current room visually done, but allow revisiting
     if (_currentRoomIdx < _rooms.length - 1) {
@@ -1051,48 +1240,71 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
   }
 
   Widget _buildIssuePhotoStep(RoomClean room, List<Photo> photos) {
-    final issuePhotos = photos.where((p) => p.type == 'issue').toList();
-
     return _stepCard(
       icon: Icons.search,
       iconColor: OceanTheme.warning,
       title: 'Anything to Report?',
-      description:
-          'Take photos of anything broken, damaged, or left behind. This is optional.',
+      description: 'Report anything broken, damaged, or needing attention. Optional.',
       child: Column(
         children: [
-          if (issuePhotos.isNotEmpty) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: issuePhotos
-                  .map(
-                    (_) => Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: OceanTheme.error, width: 2),
-                        color: OceanTheme.surface,
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.warning_amber,
-                        color: OceanTheme.error,
-                        size: 24,
-                      ),
+          // Show submitted issues for this session
+          if (_submittedIssues.isNotEmpty) ...[
+            ..._submittedIssues.map((issue) => Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: OceanTheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: issue['severity'] == 'high'
+                      ? OceanTheme.error
+                      : issue['severity'] == 'medium'
+                      ? OceanTheme.warning
+                      : OceanTheme.success,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: issue['severity'] == 'high'
+                        ? OceanTheme.error
+                        : OceanTheme.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      issue['title']!,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                     ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: issue['severity'] == 'high'
+                          ? OceanTheme.error
+                          : issue['severity'] == 'medium'
+                          ? OceanTheme.warning
+                          : OceanTheme.success,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      issue['severity']!,
+                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            const SizedBox(height: 8),
           ],
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _uploading ? null : _handleIssuePhoto,
-              icon: const Icon(Icons.camera_alt),
-              label: Text(_uploading ? 'Uploading...' : 'Report Issue'),
+              onPressed: _showReportIssueSheet,
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Report an Issue'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: OceanTheme.warning,
                 side: const BorderSide(color: OceanTheme.warning, width: 2),
