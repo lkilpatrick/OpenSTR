@@ -12,7 +12,7 @@ const VALID_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   accepted: ['in_progress'],
   in_progress: ['submitted'],
   submitted: ['approved', 'rejected'],
-  approved: ['rejected'],
+  approved: [],
   rejected: ['in_progress'],
 };
 
@@ -89,7 +89,10 @@ router.delete('/notes/:noteId', requireRole('owner', 'admin'), async (req: AuthR
 // NOTE: Must be registered BEFORE /:sessionId to avoid Express matching "upcoming-cleans" as a sessionId
 router.get('/upcoming-cleans', async (req: AuthRequest, res: Response): Promise<void> => {
   const { property_id } = req.query;
-  const conditions = [`r.checkout_date >= CURRENT_DATE`, `r.is_blocked = false`];
+  const conditions = [
+    `r.is_blocked = false`,
+    `(r.checkout_date >= CURRENT_DATE OR cs.status = 'rejected')`,
+  ];
   const values: unknown[] = [];
   let idx = 1;
 
@@ -104,11 +107,12 @@ router.get('/upcoming-cleans', async (req: AuthRequest, res: Response): Promise<
     values.push(req.user!.userId);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = `WHERE ${conditions.join(' AND ')}`;
   const result = await pool.query(
     `SELECT r.id as reservation_id, r.checkin_date, r.checkout_date, r.guest_name, r.summary, r.num_guests,
             p.id as property_id, p.name as property_name,
             cs.id as session_id, cs.status as session_status, cs.cleaner_id, cs.session_type, cs.scheduled_date,
+            cs.rejection_reason,
             u.name as cleaner_name
      FROM reservations r
      JOIN properties p ON p.id = r.property_id

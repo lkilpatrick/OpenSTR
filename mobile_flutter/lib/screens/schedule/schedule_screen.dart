@@ -286,6 +286,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final isPending = clean.sessionStatus == 'pending';
     final isAccepted = clean.sessionStatus == 'accepted';
     final isInProgress = clean.sessionStatus == 'in_progress';
+    final isRejected = clean.sessionStatus == 'rejected';
     final canOpen = (isAccepted || isInProgress) && clean.sessionId != null;
     final nights = _nightsBetween(clean.checkinDate, clean.checkoutDate);
     final guestLabel = clean.guestName ?? clean.summary ?? 'Guest';
@@ -588,9 +589,72 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
               ),
             ),
+          // Rejected — show reason banner + redo button
+          if (isRejected && clean.sessionId != null) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: OceanTheme.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: OceanTheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      clean.rejectionReason ?? 'This clean was rejected and needs to be redone.',
+                      style: const TextStyle(fontSize: 12, color: OceanTheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _redoClean(clean.sessionId!),
+                  icon: const Icon(Icons.replay, size: 18),
+                  label: const Text(
+                    'Redo Clean →',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OceanTheme.error,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _redoClean(String sessionId) async {
+    try {
+      await _api.dio.patch(
+        '/sessions/$sessionId/status',
+        data: {'status': 'in_progress'},
+      );
+      if (mounted) {
+        await Navigator.of(context).pushNamed('/session', arguments: sessionId);
+        _fetchUpcoming();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not reopen this clean')),
+        );
+      }
+    }
   }
 
   Widget _remoteBlockedButton(String label) {

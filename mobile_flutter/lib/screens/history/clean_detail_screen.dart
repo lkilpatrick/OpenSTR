@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme.dart';
 import '../../services/api_service.dart';
 import '../common/photo_viewer.dart';
+import '../session/active_session_screen.dart';
 
 class CleanDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -86,6 +87,12 @@ class _CleanDetailScreenState extends State<CleanDetailScreen> {
         _buildHeaderCard(d, status, rating),
         const SizedBox(height: 16),
 
+        // Rejection action card
+        if (status == 'rejected') ...[
+          _buildRejectionCard(d),
+          const SizedBox(height: 16),
+        ],
+
         // Timeline card
         _buildTimelineCard(d),
         const SizedBox(height: 16),
@@ -134,6 +141,87 @@ class _CleanDetailScreenState extends State<CleanDetailScreen> {
 
         const SizedBox(height: 32),
       ],
+    );
+  }
+
+  Future<void> _redoClean(String sessionId) async {
+    try {
+      await _api.dio.patch(
+        '/sessions/$sessionId/status',
+        data: {'status': 'in_progress'},
+      );
+      if (mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ActiveSessionScreen(sessionId: sessionId),
+          ),
+        );
+        _fetchDetail();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not reopen this clean')),
+        );
+      }
+    }
+  }
+
+  Widget _buildRejectionCard(Map<String, dynamic> d) {
+    final reason = d['rejection_reason'] as String?;
+    final sessionId = d['id'] as String;
+    return Card(
+      color: const Color(0xFFFEF2F2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: OceanTheme.error.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.cancel, size: 18, color: OceanTheme.error),
+                const SizedBox(width: 8),
+                const Text(
+                  'Clean Rejected',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: OceanTheme.error,
+                  ),
+                ),
+              ],
+            ),
+            if (reason != null && reason.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                reason,
+                style: const TextStyle(fontSize: 13, color: OceanTheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _redoClean(sessionId),
+                icon: const Icon(Icons.replay, size: 18),
+                label: const Text(
+                  'Redo This Clean',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OceanTheme.error,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

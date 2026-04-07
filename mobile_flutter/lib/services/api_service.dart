@@ -16,11 +16,8 @@ class ApiService {
         'API_URL',
         defaultValue: 'http://localhost:3000',
       ),
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
     ));
 
     if (kDebugMode) {
@@ -37,6 +34,11 @@ class ApiService {
         final token = await _storage.getAccessToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
+        }
+        // Only set JSON content-type for non-multipart requests
+        // Multipart (photo uploads) must let Dio set its own boundary
+        if (options.data is! FormData) {
+          options.headers['Content-Type'] = 'application/json';
         }
         handler.next(options);
       },

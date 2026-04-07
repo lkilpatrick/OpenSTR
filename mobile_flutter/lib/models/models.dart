@@ -161,6 +161,7 @@ class UpcomingClean {
   final String? cleanerId;
   final String? cleanerName;
   final String? sessionType;
+  final String? rejectionReason;
 
   UpcomingClean({
     required this.reservationId,
@@ -176,6 +177,7 @@ class UpcomingClean {
     this.cleanerId,
     this.cleanerName,
     this.sessionType,
+    this.rejectionReason,
   });
 
   factory UpcomingClean.fromJson(Map<String, dynamic> json) => UpcomingClean(
@@ -192,5 +194,6 @@ class UpcomingClean {
     cleanerId: json['cleaner_id'] as String?,
     cleanerName: json['cleaner_name'] as String?,
     sessionType: json['session_type'] as String?,
+    rejectionReason: json['rejection_reason'] as String?,
   );
 }

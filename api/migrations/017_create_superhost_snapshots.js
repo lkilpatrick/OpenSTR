@@ -1,7 +1,7 @@
 exports.up = (pgm) => {
   pgm.createTable('superhost_snapshots', {
     id: { type: 'serial', primaryKey: true },
-    property_id: { type: 'integer', notNull: true, references: 'properties', onDelete: 'CASCADE' },
+    property_id: { type: 'uuid', notNull: true, references: 'properties', onDelete: 'CASCADE' },
     snapshot_date: { type: 'date', notNull: true },
     overall_rating: { type: 'numeric(3,2)' },
     cleanliness_rating: { type: 'numeric(3,2)' },

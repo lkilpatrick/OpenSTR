@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenSTR Production Stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/tank/developer/openstr
+EnvironmentFile=/tank/developer/openstr/.env.production
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml --env-file .env.production down
+TimeoutStartSec=300
+TimeoutStopSec=120
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

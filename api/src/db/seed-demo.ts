@@ -5,9 +5,9 @@
  *
  * Usage: npx tsx src/db/seed-demo.ts
  */
-import pool from '../config/database';
+import { pool } from './pool';
 import bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
+const uuidv4 = () => crypto.randomUUID();
 
 // ── Fixed IDs for predictable references ────────────────────────────────────
 const PROP = {

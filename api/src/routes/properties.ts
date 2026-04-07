@@ -9,7 +9,7 @@ router.use(requireAuth);
 // GET /properties
 router.get('/', requireRole('owner', 'admin'), async (_req, res: Response): Promise<void> => {
   const result = await pool.query(
-    `SELECT id, name, type, address, ical_url, lock_entity_id, session_trigger_time,
+    `SELECT id, name, type, address, slug, ical_url, lock_entity_id, session_trigger_time,
             min_turnaround_hours, active, standard_id, created_at, updated_at
      FROM properties ORDER BY name`
   );
@@ -19,7 +19,7 @@ router.get('/', requireRole('owner', 'admin'), async (_req, res: Response): Prom
 // GET /properties/:propertyId
 router.get('/:propertyId', requirePropertyAccess(), async (req: AuthRequest, res: Response): Promise<void> => {
   const result = await pool.query(
-    `SELECT id, name, type, address, lock_entity_id, session_trigger_time,
+    `SELECT id, name, type, address, slug, lock_entity_id, session_trigger_time,
             min_turnaround_hours, active, standard_id, created_at, updated_at
      FROM properties WHERE id = $1`,
     [req.params.propertyId]
@@ -36,10 +36,10 @@ router.post('/', requireRole('owner'), async (req: AuthRequest, res: Response): 
     `INSERT INTO properties (name, type, address, slug, lock_entity_id, session_trigger_time, min_turnaround_hours, ical_url,
       welcome_message, house_rules, checkin_instructions, checkout_instructions, wifi_password)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-    [name, type ?? 'short_term_rental', address, slug ?? null, lock_entity_id,
-     session_trigger_time ?? '10:00', min_turnaround_hours ?? 3, ical_url ?? null,
-     welcome_message ?? null, house_rules ?? null, checkin_instructions ?? null,
-     checkout_instructions ?? null, wifi_password ?? null]
+    [name, type ?? 'short_term_rental', address, slug || null, lock_entity_id,
+     session_trigger_time ?? '10:00', min_turnaround_hours ?? 3, ical_url || null,
+     welcome_message || null, house_rules || null, checkin_instructions || null,
+     checkout_instructions || null, wifi_password || null]
   );
   const property = result.rows[0];
   // Auto-sync iCal if URL was provided
@@ -54,13 +54,14 @@ router.patch('/:propertyId', requireRole('owner', 'admin'), async (req: AuthRequ
   const fields = ['name', 'type', 'address', 'slug', 'lock_entity_id', 'session_trigger_time',
                   'min_turnaround_hours', 'active', 'ical_url', 'welcome_message', 'house_rules',
                   'checkin_instructions', 'checkout_instructions', 'wifi_password'];
+  const nullableStrings = new Set(['slug', 'ical_url', 'lock_entity_id', 'welcome_message', 'house_rules', 'checkin_instructions', 'checkout_instructions', 'wifi_password']);
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
   for (const f of fields) {
     if (req.body[f] !== undefined) {
       updates.push(`${f} = $${idx++}`);
-      values.push(req.body[f]);
+      values.push(nullableStrings.has(f) ? (req.body[f] || null) : req.body[f]);
     }
   }
   if (updates.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
@@ -143,12 +144,43 @@ router.get('/:propertyId/rooms/:roomId/tasks', requirePropertyAccess(), async (r
 // POST /properties/:propertyId/rooms
 router.post('/:propertyId/rooms', requireRole('owner', 'admin'), async (req: AuthRequest, res: Response): Promise<void> => {
   const { slug, display_name, theme_name, standard_room_type, display_order } = req.body;
-  const result = await pool.query(
-    `INSERT INTO rooms (property_id, slug, display_name, theme_name, standard_room_type, display_order)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [req.params.propertyId, slug, display_name, theme_name, standard_room_type, display_order ?? 0]
-  );
-  res.status(201).json(result.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `INSERT INTO rooms (property_id, slug, display_name, theme_name, standard_room_type, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.params.propertyId, slug || display_name?.toLowerCase().replace(/\s+/g, '-'), display_name, theme_name, standard_room_type, display_order ?? 0]
+    );
+    const room = result.rows[0];
+
+    // Auto-seed tasks from property's standard if room has a standard_room_type
+    if (standard_room_type) {
+      const prop = await client.query(`SELECT standard_id FROM properties WHERE id = $1`, [req.params.propertyId]);
+      const standardId = prop.rows[0]?.standard_id;
+      if (standardId) {
+        const stdTasks = await client.query(
+          `SELECT * FROM standard_tasks WHERE standard_id = $1 AND room_type = $2 AND archived = false`,
+          [standardId, standard_room_type]
+        );
+        for (const st of stdTasks.rows) {
+          await client.query(
+            `INSERT INTO tasks (property_id, room_id, standard_task_id, label, category, frequency, is_high_touch, is_mandatory, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [req.params.propertyId, room.id, st.id, st.label, st.category, st.frequency, st.is_high_touch, st.is_mandatory, st.display_order]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(room);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // PATCH /properties/:propertyId/rooms/reorder — batch reorder rooms

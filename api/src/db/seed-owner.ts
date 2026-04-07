@@ -9,9 +9,9 @@ import { auth } from '../lib/auth';
 import { pool } from './pool';
 
 async function seedOwner() {
-  const email = 'owner@openstr.dev';
-  const name = 'Property Owner';
-  const password = 'ChangeMe123!'; // Change this after first login
+  const email = 'owner@example.com';
+  const name = 'Luke';
+  const password = 'ChangeMe123!';
 
   // Check if user already exists
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);

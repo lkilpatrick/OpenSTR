@@ -30,7 +30,13 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     }
 
     const user = session.user as { id: string; role?: string };
-    const role = (user.role ?? 'cleaner') as UserRole;
+
+    // Always fetch role fresh from DB — session cache may not include it
+    const dbUser = await pool.query<{ role: string }>(
+      'SELECT role FROM users WHERE id = $1',
+      [user.id]
+    );
+    const role = ((dbUser.rows[0]?.role) ?? user.role ?? 'cleaner') as UserRole;
 
     // Fetch property IDs for cleaners
     let propertyIds: string[] = [];

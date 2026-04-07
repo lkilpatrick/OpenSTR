@@ -28,7 +28,7 @@ COPY --from=base /app/node_modules ./node_modules
 # Include source for migrations and seed scripts (run via tsx)
 COPY --from=base /app/api/migrations ./migrations
 COPY --from=base /app/api/src/db ./src/db
-COPY --from=base /app/api/src/config ./src/config
+COPY --from=base /app/api/src/lib ./src/lib
 
 RUN chown -R appuser:appgroup /app
 USER appuser

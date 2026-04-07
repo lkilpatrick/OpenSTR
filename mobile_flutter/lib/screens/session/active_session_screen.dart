@@ -174,6 +174,23 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     }
   }
 
+  Future<void> _handleTaskUncomplete(String taskId) async {
+    final room = _currentRoom;
+    if (room == null) return;
+    try {
+      await _api.dio.delete('/photos/${room.id}/tasks/$taskId/complete');
+      setState(() {
+        _completedTasks[room.id]?.remove(taskId);
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to uncheck task')),
+        );
+      }
+    }
+  }
+
   Future<void> _handleAfterPhoto() async {
     final photo = await _takePhoto('after');
     if (photo != null) {
@@ -838,7 +855,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: InkWell(
-                onTap: done ? null : () => _handleTaskComplete(task.id),
+                onTap: () => done ? _handleTaskUncomplete(task.id) : _handleTaskComplete(task.id),
                 borderRadius: BorderRadius.circular(8),
                 child: Opacity(
                   opacity: done ? 0.5 : 1.0,

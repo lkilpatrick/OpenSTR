@@ -57,6 +57,17 @@ export default function PropertiesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['properties-admin'] }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/properties/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['properties-admin'] }); setSelectedId(null); },
+  });
+
+  function handleDelete(id: string, name: string) {
+    if (window.confirm(`Delete "${name}" and all its data? This cannot be undone.`)) {
+      deleteMutation.mutate(id);
+    }
+  }
+
   function saveField(field: string) {
     if (selectedId && editField[field] !== undefined) {
       updateMutation.mutate({ id: selectedId, data: { [field]: editField[field] } });
@@ -117,7 +128,7 @@ export default function PropertiesPage() {
                       {field.replace('_', ' ')}
                     </label>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input value={editField[field] ?? (selected as Record<string, string>)[field] ?? ''}
+                      <input value={editField[field] ?? (selected as unknown as Record<string, string>)[field] ?? ''}
                         onChange={e => setEditField(prev => ({ ...prev, [field]: e.target.value }))}
                         style={{ flex: 1, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14 }} />
                       {editField[field] !== undefined && (
@@ -143,6 +154,10 @@ export default function PropertiesPage() {
                   <button onClick={() => updateMutation.mutate({ id: selected.id, data: { active: !selected.active } })}
                     style={{ background: selected.active ? '#ef4444' : '#10b981', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     {selected.active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button onClick={() => handleDelete(selected.id, selected.name)}
+                    style={{ background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}>
+                    Delete Property
                   </button>
                 </div>
               </div>

@@ -16,6 +16,7 @@
     "db:seed:owner": "tsx src/db/seed-owner.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "bcrypt": "^5.1.1",
     "better-auth": "^1.5.6",
     "cookie-parser": "^1.4.7",

@@ -194,7 +194,17 @@ The mobile app detects whether the cleaner is on your local WiFi or accessing re
 - **Remote access**: Can view schedule, accept assignments, view history
 - **Local WiFi only**: Can start and continue cleaning sessions
 
-This is enforced by nginx's `geo` module which tags requests with an `X-Is-Local` header based on the client's IP range. The mobile app calls `/api/network-check` to detect its status.
+This is enforced by nginx's `geo` module which tags requests with an `X-Is-Local` header based on the client's IP range. The mobile app calls `/network-check` to detect its status.
+
+### Cloudflare Tunnel
+
+If you use a Cloudflare Tunnel instead of opening ports directly, set `DOMAIN` in `.env.production` to your public tunnel hostname (e.g. `app.yourdomain.com`). The nginx config includes a `/auth/` location that rewrites to `/api/auth/` so the mobile app's auth calls work correctly through the tunnel.
+
+```env
+DOMAIN=app.yourdomain.com
+BETTER_AUTH_URL=https://app.yourdomain.com
+ALLOWED_ORIGINS=https://app.yourdomain.com,https://YOUR_TAILSCALE_IP
+```
 
 ---
 
@@ -224,20 +234,28 @@ See `docs/home-assistant-setup.md` for setup instructions.
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /auth/login` | JWT login |
+| `POST /auth/sign-in/email` | Sign in (email + password) |
 | `GET /properties` | List properties |
 | `GET /properties/:id/rooms` | Rooms for a property |
 | `GET /properties/:id/rooms/:roomId/tasks` | Tasks for a room |
 | `GET /sessions` | List clean sessions |
-| `POST /sessions/schedule` | Schedule a clean |
+| `GET /sessions/upcoming-cleans` | Upcoming cleans for cleaner (includes rejected) |
+| `POST /sessions/claim` | Cleaner claims an unassigned clean |
+| `POST /sessions/:id/accept` | Accept a pending session |
+| `PATCH /sessions/:id/status` | Transition session status |
+| `POST /sessions/schedule` | Schedule a clean (owner/admin) |
 | `GET /ical/reservations/:id` | Reservations from iCal |
 | `POST /ical/sync/:id` | Trigger iCal sync |
 | `GET /admin/cleaners` | Cleaner performance |
 | `GET /admin/superhost/current` | Superhost metrics |
 | `GET /issues` | Property issues |
 | `GET /messages` | Guest messages |
+| `POST /photos/:roomCleanId` | Upload before/after/issue photo |
+| `GET /photos/:roomCleanId` | List photos for a room clean |
+| `POST /photos/:roomCleanId/tasks/:taskId/complete` | Mark task complete |
+| `DELETE /photos/:roomCleanId/tasks/:taskId/complete` | Uncheck a task |
 
-All endpoints require JWT auth (`Authorization: Bearer <token>`).
+All endpoints require bearer token auth (`Authorization: Bearer <token>`). Auth is handled by [better-auth](https://better-auth.com) mounted at `/api/auth/*` (admin) and `/auth/*` (mobile).
 
 ---
 
@@ -277,11 +295,31 @@ flutter run --dart-define=API_URL=http://localhost:3000
 - [x] Network-aware WiFi restriction for cleaning actions
 - [x] Docker production deployment with SSL
 - [x] Cleaner pay tracking
+- [x] Rejection/redo workflow — owner rejects with reason, cleaner sees it on Schedule tab and can redo
+- [x] Cloudflare Tunnel support
+- [x] Auto-seed room checklists from cleaning standards on room creation
 - [ ] VRBO / Booking.com iCal support
 - [ ] Direct booking calendar (no OTA)
 - [ ] Native iOS / Android app builds
 - [ ] Zapier / webhook integrations
 - [ ] Multi-language support
+
+---
+
+## Changelog
+
+### April 2026
+
+- **Rejection/redo flow** — When an owner rejects a submitted clean, the session reappears on the cleaner's Schedule tab with the rejection reason and a "Redo Clean" button. Tapping it transitions the session back to `in_progress` and opens the room checklist. The same button is also available in the History detail screen.
+- **Task check/uncheck** — Cleaners can now tap a completed task again to uncheck it during an active session.
+- **Photo upload fix** — Fixed a bug where `Content-Type: application/json` was being sent globally on all requests including multipart photo uploads, preventing the before photo from advancing to the checklist.
+- **nginx `/photos/` routing fix** — The `/photos/` API routes (upload, task completion) were being intercepted by nginx's static file server instead of being proxied to the API. Fixed by adding `photos` to the nginx proxy regex.
+- **Cloudflare Tunnel login** — Fixed mobile app login through Cloudflare tunnels by adding a `/auth/` nginx location that rewrites to `/api/auth/` (better-auth's configured base path).
+- **Property slug field** — Added `slug` to all `GET /properties` responses; fixed empty-string coercion to `null` in POST and PATCH handlers.
+- **Delete property** — Added Delete Property button with confirmation to the admin panel.
+- **Auto-seed tasks** — When a new room is created via `POST /properties/:id/rooms`, tasks are automatically seeded from the property's cleaning standard.
+- **Session state machine** — Added `rejected → in_progress` transition so cleaners can redo rejected sessions.
+- **Upload timeouts** — Increased Dio connect/receive timeouts to 30s/60s for reliable photo uploads on mobile.
 
 ---
 
