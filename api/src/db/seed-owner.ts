@@ -9,9 +9,9 @@ import { auth } from '../lib/auth';
 import { pool } from './pool';
 
 async function seedOwner() {
-  const email = 'owner@example.com';
-  const name = 'Luke';
-  const password = 'ChangeMe123!';
+  const email = process.env.OWNER_EMAIL ?? 'owner@example.com';
+  const name = process.env.OWNER_NAME ?? 'Property Owner';
+  const password = process.env.OWNER_PASSWORD ?? 'ChangeMe123!';
 
   // Check if user already exists
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -49,7 +49,7 @@ async function seedOwner() {
     console.log(`  Name: ${name}`);
     console.log(`  Password: ${password}`);
     console.log(`  User ID: ${result.user.id}`);
-    console.log('\n⚠️  Change the password after first login!');
+    console.log('\n⚠️  Change the password after first login!\n  Tip: set OWNER_EMAIL, OWNER_NAME, OWNER_PASSWORD in your .env to customise.');
   } catch (err) {
     console.error('Error creating owner:', err);
   }

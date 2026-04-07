@@ -62,3 +62,11 @@ coverage/
 tmp/
 temp/
 docs/site/
+
+# Private / personal seed files — contain property-specific data
+api/src/db/seed-full.ts
+api/src/db/seed-owner.local.ts
+api/src/db/seeds/
+
+# Issues folder — contains personal project notes
+issues/

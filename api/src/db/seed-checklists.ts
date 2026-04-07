@@ -1,15 +1,16 @@
 /**
- * Seeds default standard tasks into the "Enhanced Clean" standard,
- * creates rooms for My STR Property, then populates tasks for all
- * properties that use that standard.
+ * Seeds default standard tasks into the first active standard,
+ * creates rooms for a given property, then populates tasks for those rooms.
+ *
+ * Usage: npx tsx src/db/seed-checklists.ts <property_id>
+ * Or set SEED_PROPERTY_ID in your .env
  *
  * Safe to run multiple times — skips existing rooms/tasks.
  */
 import 'dotenv/config';
 import { pool } from './pool';
 
-const STANDARD_ID = '74eb4cc0-515f-4131-a55b-109329b81504';
-const OCEAN_VIEW_ID = 'YOUR-PROPERTY-ID-HERE';
+const PROPERTY_ID = process.argv[2] ?? process.env.SEED_PROPERTY_ID;
 
 // Default tasks per room type
 const DEFAULT_TASKS: { room_type: string; label: string; category: string; frequency: string; is_high_touch: boolean; is_mandatory: boolean; display_order: number }[] = [
@@ -72,8 +73,8 @@ const DEFAULT_TASKS: { room_type: string; label: string; category: string; frequ
   { room_type: 'outdoor', label: 'Check BBQ grill (clean grates if used)', category: 'Check', frequency: 'every_clean', is_high_touch: false, is_mandatory: false, display_order: 2 },
 ];
 
-// Rooms to create for My STR Property
-const OCEAN_VIEW_ROOMS = [
+// Default rooms to create for the target property
+const DEFAULT_ROOMS = [
   { display_name: 'Kitchen',      slug: 'kitchen',      standard_room_type: 'kitchen',     display_order: 0 },
   { display_name: 'Bathroom',     slug: 'bathroom',     standard_room_type: 'bathroom',    display_order: 1 },
   { display_name: 'Bedroom',      slug: 'bedroom',      standard_room_type: 'bedroom',     display_order: 2 },
@@ -83,9 +84,25 @@ const OCEAN_VIEW_ROOMS = [
 ];
 
 async function run() {
+  if (!PROPERTY_ID) {
+    console.error('Usage: npx tsx src/db/seed-checklists.ts <property_id>');
+    console.error('Or set SEED_PROPERTY_ID in your .env');
+    process.exit(1);
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Resolve the standard — use first active standard or create one
+    let standardRes = await client.query(`SELECT id FROM standards WHERE is_active = true LIMIT 1`);
+    if (standardRes.rows.length === 0) {
+      standardRes = await client.query(
+        `INSERT INTO standards (name, is_active) VALUES ('Enhanced Clean', true) RETURNING id`
+      );
+    }
+    const STANDARD_ID: string = standardRes.rows[0].id;
+    console.log(`📋 Using standard: ${STANDARD_ID}`);
 
     // 1. Seed standard tasks (skip if already exist)
     console.log('📋 Seeding standard tasks...');
@@ -106,15 +123,15 @@ async function run() {
     }
     console.log(`  ✅ ${taskSeeded} standard tasks seeded`);
 
-    // 2. Create rooms for My STR Property (skip existing)
-    console.log('🏠 Creating rooms for My STR Property...');
+    // 2. Create rooms for the target property (skip existing)
+    console.log(`🏠 Creating rooms for property ${PROPERTY_ID}...`);
     let roomsCreated = 0;
     const roomIds: { id: string; standard_room_type: string }[] = [];
 
-    for (const r of OCEAN_VIEW_ROOMS) {
+    for (const r of DEFAULT_ROOMS) {
       const exists = await client.query(
         `SELECT id, standard_room_type FROM rooms WHERE property_id = $1 AND slug = $2`,
-        [OCEAN_VIEW_ID, r.slug]
+        [PROPERTY_ID, r.slug]
       );
       if (exists.rows.length > 0) {
         roomIds.push({ id: exists.rows[0].id, standard_room_type: r.standard_room_type });
@@ -123,7 +140,7 @@ async function run() {
         const inserted = await client.query(
           `INSERT INTO rooms (property_id, slug, display_name, standard_room_type, display_order)
            VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-          [OCEAN_VIEW_ID, r.slug, r.display_name, r.standard_room_type, r.display_order]
+          [PROPERTY_ID, r.slug, r.display_name, r.standard_room_type, r.display_order]
         );
         roomIds.push({ id: inserted.rows[0].id, standard_room_type: r.standard_room_type });
         roomsCreated++;
@@ -131,14 +148,14 @@ async function run() {
       }
     }
 
-    // Also assign the standard to My STR Property
+    // Assign the standard to the property
     await client.query(
       `UPDATE properties SET standard_id = $1 WHERE id = $2`,
-      [STANDARD_ID, OCEAN_VIEW_ID]
+      [STANDARD_ID, PROPERTY_ID]
     );
 
     // 3. Populate tasks for each room from standard_tasks
-    console.log('✅ Populating tasks for Ocean View rooms...');
+    console.log('✅ Populating tasks for rooms...');
     let tasksCreated = 0;
     for (const room of roomIds) {
       const stdTasks = await client.query(
@@ -154,7 +171,7 @@ async function run() {
           await client.query(
             `INSERT INTO tasks (property_id, room_id, standard_task_id, label, category, frequency, is_high_touch, is_mandatory, display_order)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [OCEAN_VIEW_ID, room.id, st.id, st.label, st.category, st.frequency, st.is_high_touch, st.is_mandatory, st.display_order]
+            [PROPERTY_ID, room.id, st.id, st.label, st.category, st.frequency, st.is_high_touch, st.is_mandatory, st.display_order]
           );
           tasksCreated++;
         }
